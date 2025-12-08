@@ -151,10 +151,10 @@ class TestIntegration:
 
         output = output_stream.getvalue().strip().split('\n')
 
-        # Should have error responses
-        assert len(output) >= 3
+        # Should have error responses for invalid START and TURN, but UNKNOWN_COMMAND is ignored
+        assert len(output) == 2
         assert any("ERROR" in line for line in output)
-        assert any("UNKNOWN" in line for line in output)
+        # No UNKNOWN response since unknown commands are now ignored
 
     def test_context_integration(self):
         """Test that context methods are called correctly"""

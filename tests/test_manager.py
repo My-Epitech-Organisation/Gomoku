@@ -152,8 +152,8 @@ class TestCommunicationManager:
     def test_process_command_unknown(self):
         command = Command(CommandType.UNKNOWN)
         responses = self.manager.process_command(command)
-        assert len(responses) == 1
-        assert responses[0].type == ResponseType.UNKNOWN
+        # Unknown commands are now ignored (no response sent)
+        assert len(responses) == 0
 
     def test_read_board_command(self):
         from communication.protocol.commands import BoardCommand
