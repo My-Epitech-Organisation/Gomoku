@@ -1,0 +1,42 @@
+##
+## EPITECH PROJECT, 2025
+## Gomoku
+## File description:
+## constants
+##
+
+BRAIN_NAME = "pbrain-gomoku-ai"
+BRAIN_VERSION = "1.0"
+BRAIN_AUTHOR = "AI"
+BRAIN_COUNTRY = "FR"
+
+ERROR_PREFIX = "ERROR"
+UNKNOWN_PREFIX = "UNKNOWN"
+OK_RESPONSE = "OK"
+
+PARSE_ERROR = "Parse error"
+UNEXPECTED_ERROR = "Unexpected error"
+INITIALIZATION_FAILED = "Initialization failed"
+CONTEXT_NO_INIT = "Context does not support initialization"
+OPENING_MOVE_FAILED = "Opening move failed"
+CONTEXT_NO_OPENING = "Context does not support opening move"
+MOVE_GENERATION_FAILED = "Move generation failed"
+CONTEXT_NO_MOVE_GEN = "Context does not support move generation"
+BOARD_PROCESSING_FAILED = "Board processing failed"
+COMMAND_NOT_IMPL = "Command not implemented"
+
+INVALID_START_CMD = "Invalid START"
+INVALID_TURN_CMD = "Invalid TURN"
+INVALID_BOARD_LINE = "Invalid board line"
+DONE_KEYWORD = "DONE"
+
+PARAM_SIZE = "size"
+PARAM_X = "x"
+PARAM_Y = "y"
+
+METHOD_GET_ABOUT_INFO = "get_about_info"
+METHOD_INITIALIZE_BOARD = "initialize_board"
+METHOD_GET_OPENING_MOVE = "get_opening_move"
+METHOD_PROCESS_OPPONENT_MOVE = "process_opponent_move"
+METHOD_GET_BEST_MOVE = "get_best_move"
+METHOD_PROCESS_BOARD = "process_board"
