@@ -1,0 +1,54 @@
+[tool.ruff]
+# Exclude a variety of commonly ignored directories
+exclude = [
+    ".git",
+    ".env",
+    ".venv",
+    "venv",
+    "env",
+    "migrations",
+    "__pycache__",
+    "build",
+    "dist",
+]
+
+# Same as Black
+line-length = 88
+
+# Assume Python 3.8
+target-version = "py38"
+
+[tool.ruff.lint]
+# Enable Pyflakes ('F'), pycodestyle ('E'), isort ('I')
+select = ["E", "F", "I", "W", "D"]
+
+ignore = ["D100",  # Missing docstring in public module
+          "D203",  # 1 blank line required before class docstring
+          "D213"]  # Multi-line docstring summary should start at the first line
+
+# Allow autofix for all enabled rules (when '--fix') is provided
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.lint.mccabe]
+# Unlike Flake8, default to a complexity level of 10.
+max-complexity = 10
+
+[tool.black]
+line-length = 88
+target-version = ['py38']
+include = '\.pyi?$'
+exclude = '''
+/(
+    \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | migrations
+)/
+'''
