@@ -1,3 +1,9 @@
+##
+## EPITECH PROJECT, 2025
+## Gomoku
+## File description:
+## gomoku_visualizer_pyside
+##
 
 import sys
 import os

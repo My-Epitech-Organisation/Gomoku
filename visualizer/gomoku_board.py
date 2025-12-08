@@ -1,3 +1,9 @@
+##
+## EPITECH PROJECT, 2025
+## Gomoku
+## File description:
+## gomoku_board
+##
 
 from typing import List
 
