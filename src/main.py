@@ -1,5 +1,12 @@
 #!/usr/bin/env python3
 
+##
+## EPITECH PROJECT, 2025
+## Gomoku
+## File description:
+## main
+##
+
 import constants
 from communication import CommunicationManager
 
