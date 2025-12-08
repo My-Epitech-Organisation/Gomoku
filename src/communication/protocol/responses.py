@@ -43,6 +43,9 @@ class MoveResponse(Response):
         self.x = x
         self.y = y
 
+    def to_output(self) -> str:
+        return f"{self.x},{self.y}"
+
 
 class AboutResponse(Response):
     def __init__(
@@ -58,11 +61,18 @@ class AboutResponse(Response):
         version = version or constants.BRAIN_VERSION
         author = author or constants.BRAIN_AUTHOR
         country = country or constants.BRAIN_COUNTRY
-        info_parts = [f'name="{name}"', f'version="{version}"', f'author="{author}"']
+        info_parts = [
+            f'{constants.ABOUT_FIELD_NAME}="{name}"',
+            f'{constants.ABOUT_FIELD_VERSION}="{version}"',
+            f'{constants.ABOUT_FIELD_AUTHOR}="{author}"',
+        ]
         if country:
-            info_parts.append(f'country="{country}"')
+            info_parts.append(f'{constants.ABOUT_FIELD_COUNTRY}="{country}"')
         if www:
-            info_parts.append(f'www="{www}"')
+            info_parts.append(f'{constants.ABOUT_FIELD_WWW}="{www}"')
         if email:
-            info_parts.append(f'email="{email}"')
+            info_parts.append(f'{constants.ABOUT_FIELD_EMAIL}="{email}"')
         super().__init__(ResponseType.OK, ", ".join(info_parts))
+
+    def to_output(self) -> str:
+        return self.data
