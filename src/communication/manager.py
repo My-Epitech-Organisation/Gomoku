@@ -22,7 +22,6 @@ from .protocol.responses import (
     MoveResponse,
     OkResponse,
     Response,
-    UnknownResponse,
 )
 
 
@@ -67,7 +66,7 @@ class CommunicationManager:
             return [self._handle_turn(command)]
         elif command.type == CommandType.BOARD:
             return [self._handle_board(command)]
-        return [UnknownResponse(constants.COMMAND_NOT_IMPL)]
+        return []
 
     def _handle_about(self) -> Response:
         if hasattr(self.context, constants.METHOD_GET_ABOUT_INFO):
