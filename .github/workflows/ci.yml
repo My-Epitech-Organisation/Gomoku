@@ -1,0 +1,86 @@
+# Gomoku CI Workflow
+
+name: CI
+
+on:
+  push:
+    branches: [ "main" ]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+  pull_request:
+    branches: [ "*" ]
+  workflow_dispatch:
+
+env:
+  MIRROR_REPO_URL: "git@github.com:EpitechPGE3-2025/G-AIA-500-NAN-5-1-gomoku-1.git"
+
+jobs:
+  # -----------------------------
+  # Quick Check Repository
+  # -----------------------------
+  check-repository:
+    runs-on: ubuntu-latest
+    outputs:
+      same_repository: ${{ steps.check_repo.outputs.same_repository }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Is this the mirror repository?
+        id: check_repo
+        run: |
+          if [ "${{ github.event.repository.ssh_url }}" = "${{ env.MIRROR_REPO_URL }}" ]; then
+            echo "::warning::Repository is the same as the mirror repository."
+            echo "same_repository=true" >> $GITHUB_OUTPUT
+          else
+            echo "::notice::Repository is different from the mirror repository."
+            echo "same_repository=false" >> $GITHUB_OUTPUT
+          fi
+
+  # -----------------------------
+  # Linter
+  # -----------------------------
+  linter:
+    name: Linter
+    runs-on: ubuntu-latest
+    needs: [check-repository]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
+
+      - name: Install linter
+        run: |
+          pip install flake8
+
+      - name: Run linter
+        run: |
+          echo "Running linter..."
+          flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+  # -----------------------------
+  # Push to Mirror Repository
+  # -----------------------------
+  push-to-mirror:
+    name: Push to Mirror Repository
+    runs-on: ubuntu-latest
+    needs: [check-repository, linter]
+    if: |
+      always() &&
+      needs.check-repository.outputs.same_repository == 'false' &&
+      needs.linter.result == 'success'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: pixta-dev/repository-mirroring-action@v1
+        with:
+          target_repo_url: ${{ env.MIRROR_REPO_URL }}
+          ssh_private_key: ${{ secrets.GOMOKU_SSH_KEY }}
