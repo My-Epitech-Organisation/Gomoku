@@ -58,5 +58,6 @@ exclude = '''
   | dist
   | migrations
   | tests
+  | visualizer
 )/
 '''
