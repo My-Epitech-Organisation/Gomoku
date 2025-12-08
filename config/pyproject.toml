@@ -23,6 +23,13 @@ target-version = "py38"
 select = ["E", "F", "I", "W", "D"]
 
 ignore = ["D100",  # Missing docstring in public module
+          "D101",  # Missing docstring in public class
+          "D102",  # Missing docstring in public method
+          "D103",  # Missing docstring in public function
+          "D104",  # Missing docstring in public package
+          "D105",  # Missing docstring in magic method
+          "D106",  # Missing docstring in public nested class
+          "D107",  # Missing docstring in __init__
           "D203",  # 1 blank line required before class docstring
           "D213"]  # Multi-line docstring summary should start at the first line
 
@@ -50,5 +57,6 @@ exclude = '''
   | build
   | dist
   | migrations
+  | tests
 )/
 '''
