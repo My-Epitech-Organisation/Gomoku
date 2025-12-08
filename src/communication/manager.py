@@ -7,6 +7,7 @@
 
 import sys
 from typing import Any, TextIO
+import time
 
 import constants
 
@@ -88,6 +89,8 @@ class CommunicationManager:
         try:
             if hasattr(self.context, constants.METHOD_GET_OPENING_MOVE):
                 x, y = self.context.get_opening_move()
+                # Temporary sleep for testing hot reload
+                time.sleep(1)
                 return MoveResponse(x, y)
             return ErrorResponse(constants.CONTEXT_NO_OPENING)
         except Exception as e:
@@ -101,6 +104,8 @@ class CommunicationManager:
                 self.context.process_opponent_move(x, y)
             if hasattr(self.context, constants.METHOD_GET_BEST_MOVE):
                 move_x, move_y = self.context.get_best_move()
+                # Temporary sleep for testing hot reload
+                time.sleep(1)
                 return MoveResponse(move_x, move_y)
             return ErrorResponse(constants.CONTEXT_NO_MOVE_GEN)
         except Exception as e:
