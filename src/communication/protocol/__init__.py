@@ -1,3 +1,10 @@
+##
+## EPITECH PROJECT, 2025
+## Gomoku
+## File description:
+## __init__
+##
+
 from .commands import Command, CommandType
 from .constants import BOARD_SIZE, PROTOCOL_VERSION, StoneType
 from .parser import ProtocolParser

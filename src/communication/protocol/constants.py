@@ -1,3 +1,10 @@
+##
+## EPITECH PROJECT, 2025
+## Gomoku
+## File description:
+## constants
+##
+
 from enum import IntEnum
 
 PROTOCOL_VERSION = "2.0"

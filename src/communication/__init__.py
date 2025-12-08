@@ -1,3 +1,10 @@
+##
+## EPITECH PROJECT, 2025
+## Gomoku
+## File description:
+## __init__
+##
+
 from .manager import CommunicationManager
 from .protocol.commands import Command, CommandType
 from .protocol.constants import BOARD_SIZE, PROTOCOL_VERSION, StoneType

@@ -1,3 +1,10 @@
+##
+## EPITECH PROJECT, 2025
+## Gomoku
+## File description:
+## parser
+##
+
 import re
 
 import constants

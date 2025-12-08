@@ -1,3 +1,10 @@
+##
+## EPITECH PROJECT, 2025
+## Gomoku
+## File description:
+## commands
+##
+
 from enum import Enum
 from typing import Any
 
