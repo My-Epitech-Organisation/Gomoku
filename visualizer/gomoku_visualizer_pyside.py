@@ -2,11 +2,13 @@
 import sys
 import os
 import time
+import subprocess
 from typing import List, Tuple, Optional
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QSlider, QFrame, QSplitter, QTextEdit,
-    QGroupBox, QProgressBar, QStatusBar
+    QGroupBox, QProgressBar, QStatusBar, QFormLayout,
+    QSpinBox, QLineEdit
 )
 from PySide6.QtCore import (
     Qt, QTimer, QThread, Signal, QRectF, QPointF
@@ -29,7 +31,6 @@ class BoardWidget(QWidget):
         self.moves = []
         self.current_move = 0
 
-        # Calculate minimum size
         min_width = (board_size + 1) * cell_size
         min_height = (board_size + 1) * cell_size
         self.setMinimumSize(min_width, min_height)
@@ -38,24 +39,19 @@ class BoardWidget(QWidget):
         painter = QPainter(self)
         painter.setRenderHint(QPainter.RenderHint.Antialiasing)
 
-        # Draw board background
-        painter.fillRect(self.rect(), QColor(205, 133, 63))  # Wood color
+        painter.fillRect(self.rect(), QColor(205, 133, 63))
 
-        # Draw grid
-        pen = QPen(QColor(139, 69, 19), 2)  # Grid color
+        pen = QPen(QColor(139, 69, 19), 2)
         painter.setPen(pen)
 
         offset = self.cell_size
         for i in range(self.board_size):
-            # Vertical lines
             x = offset + i * self.cell_size
             painter.drawLine(x, offset, x, offset + (self.board_size - 1) * self.cell_size)
 
-            # Horizontal lines
             y = offset + i * self.cell_size
             painter.drawLine(offset, y, offset + (self.board_size - 1) * self.cell_size, y)
 
-        # Draw stones
         for y in range(self.board_size):
             for x in range(self.board_size):
                 stone = self.board.get_stone(x, y)
@@ -64,9 +60,9 @@ class BoardWidget(QWidget):
                     center_y = offset + y * self.cell_size
                     radius = self.cell_size // 2 - 3
 
-                    if stone == 1:  # Black stone
+                    if stone == 1:
                         painter.setBrush(QBrush(QColor(30, 30, 30)))
-                    else:  # White stone
+                    else:
                         painter.setBrush(QBrush(QColor(240, 240, 240)))
 
                     painter.setPen(QPen(Qt.PenStyle.NoPen))
@@ -76,7 +72,6 @@ class BoardWidget(QWidget):
         self.moves = moves
         self.current_move = current_move
 
-        # Recreate board state
         self.board.clear()
         for i in range(min(current_move, len(moves))):
             x, y, player = moves[i]
@@ -87,7 +82,6 @@ class BoardWidget(QWidget):
 
 class ControlPanel(QWidget):
 
-    # Signals
     play_pause_clicked = Signal()
     next_move_clicked = Signal()
     prev_move_clicked = Signal()
@@ -95,6 +89,7 @@ class ControlPanel(QWidget):
     speed_changed = Signal(float)
     hot_reload_toggled = Signal(bool)
     real_time_toggled = Signal(bool)
+    launch_liskvork_clicked = Signal()
 
     def __init__(self):
         super().__init__()
@@ -102,8 +97,6 @@ class ControlPanel(QWidget):
 
     def setup_ui(self):
         layout = QVBoxLayout(self)
-
-        # Status group
         status_group = QGroupBox("Status")
         status_layout = QVBoxLayout(status_group)
 
@@ -128,7 +121,6 @@ class ControlPanel(QWidget):
 
         layout.addWidget(status_group)
 
-        # Speed control group
         speed_group = QGroupBox("Playback Speed")
         speed_layout = QVBoxLayout(speed_group)
 
@@ -136,14 +128,13 @@ class ControlPanel(QWidget):
         speed_layout.addWidget(self.speed_label)
 
         self.speed_slider = QSlider(Qt.Orientation.Horizontal)
-        self.speed_slider.setRange(1, 100)  # 0.1x to 10.0x (multiplied by 10)
-        self.speed_slider.setValue(10)  # 1.0x
+        self.speed_slider.setRange(1, 100)
+        self.speed_slider.setValue(10)
         self.speed_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.speed_slider.setTickInterval(10)
         self.speed_slider.valueChanged.connect(self.on_speed_changed)
         speed_layout.addWidget(self.speed_slider)
 
-        # Speed preset buttons
         preset_layout = QHBoxLayout()
         self.speed_05x_btn = QPushButton("0.5x")
         self.speed_1x_btn = QPushButton("1x")
@@ -158,7 +149,6 @@ class ControlPanel(QWidget):
         speed_layout.addLayout(preset_layout)
         layout.addWidget(speed_group)
 
-        # Control buttons group
         control_group = QGroupBox("Controls")
         control_layout = QVBoxLayout(control_group)
 
@@ -182,13 +172,13 @@ class ControlPanel(QWidget):
 
         # Toggle buttons
         toggle_layout = QVBoxLayout()
-        self.hot_reload_btn = QPushButton("🔥 Hot Reload: ON")
+        self.hot_reload_btn = QPushButton("Hot Reload: ON")
         self.hot_reload_btn.setCheckable(True)
         self.hot_reload_btn.setChecked(True)
         self.hot_reload_btn.clicked.connect(self.on_hot_reload_toggled)
         toggle_layout.addWidget(self.hot_reload_btn)
 
-        self.real_time_btn = QPushButton("⚡ Real-Time: OFF")
+        self.real_time_btn = QPushButton("Real-Time: OFF")
         self.real_time_btn.setCheckable(True)
         self.real_time_btn.clicked.connect(self.on_real_time_toggled)
         toggle_layout.addWidget(self.real_time_btn)
@@ -196,7 +186,15 @@ class ControlPanel(QWidget):
         control_layout.addLayout(toggle_layout)
         layout.addWidget(control_group)
 
-        # Winner notification (initially hidden)
+        liskvork_group = QGroupBox("Launch Game")
+        liskvork_layout = QVBoxLayout(liskvork_group)
+
+        self.launch_liskvork_btn = QPushButton("Launch Liskvork")
+        self.launch_liskvork_btn.clicked.connect(self.launch_liskvork_clicked.emit)
+        liskvork_layout.addWidget(self.launch_liskvork_btn)
+
+        layout.addWidget(liskvork_group)
+
         self.winner_frame = QFrame()
         self.winner_frame.setFrameStyle(QFrame.Shape.Box)
         self.winner_frame.setStyleSheet("background-color: #FFFFE0; border: 2px solid #008000;")
@@ -210,10 +208,10 @@ class ControlPanel(QWidget):
 
         layout.addWidget(self.winner_frame)
 
-        layout.addStretch()  # Push everything to the top
+        layout.addStretch()
 
     def on_speed_changed(self, value):
-        speed = value / 10.0  # Convert back to actual speed
+        speed = value / 10.0
         self.speed_label.setText(f"Speed: {speed:.1f}x")
         self.speed_changed.emit(speed)
 
@@ -236,13 +234,13 @@ class ControlPanel(QWidget):
     def on_hot_reload_toggled(self, checked):
         self.hot_reload_label.setText(f"Hot Reload: {'ON' if checked else 'OFF'}")
         self.hot_reload_label.setStyleSheet(f"color: {'green' if checked else 'gray'}; font-weight: bold;")
-        self.hot_reload_btn.setText(f"🔥 Hot Reload: {'ON' if checked else 'OFF'}")
+        self.hot_reload_btn.setText(f"Hot Reload: {'ON' if checked else 'OFF'}")
         self.hot_reload_toggled.emit(checked)
 
     def on_real_time_toggled(self, checked):
         self.real_time_label.setText(f"Real-Time: {'ON' if checked else 'OFF'}")
         self.real_time_label.setStyleSheet(f"color: {'green' if checked else 'gray'};")
-        self.real_time_btn.setText(f"⚡ Real-Time: {'ON' if checked else 'OFF'}")
+        self.real_time_btn.setText(f"Real-Time: {'ON' if checked else 'OFF'}")
         self.real_time_toggled.emit(checked)
 
     def update_status(self, current_move: int, total_moves: int, playing: bool,
@@ -258,10 +256,10 @@ class ControlPanel(QWidget):
         self.playback_label.setText(f"Playback: {'Playing' if playing else 'Paused'}")
         self.playback_label.setStyleSheet(f"color: {'green' if playing else 'red'};")
 
-        self.play_pause_btn.setText("⏸ Pause" if playing else "▶ Play")
+        self.play_pause_btn.setText("Pause" if playing else "Play")
 
     def show_winner(self, winner: int):
-        self.winner_label.setText(f"🏆 Winner: Player {winner}!")
+        self.winner_label.setText(f"Winner: Player {winner}!")
         self.winner_frame.setVisible(True)
 
     def hide_winner(self):
@@ -284,6 +282,7 @@ class GomokuVisualizer(QMainWindow):
 
         self.replay_file = replay_file
         self.last_modified = 0
+        self.liskvork_process = None
 
         self.setup_ui()
         self.setup_connections()
@@ -333,38 +332,35 @@ class GomokuVisualizer(QMainWindow):
         self.control_panel.speed_changed.connect(self.set_speed)
         self.control_panel.hot_reload_toggled.connect(self.set_hot_reload)
         self.control_panel.real_time_toggled.connect(self.set_real_time)
+        self.control_panel.launch_liskvork_clicked.connect(self.launch_liskvork)
 
     def keyPressEvent(self, event):
         key = event.key()
-
         if key == Qt.Key.Key_Space:
             self.toggle_playback()
-        elif key == Qt.Key.Key_Right:
-            self.next_move()
-        elif key == Qt.Key.Key_Left:
-            self.prev_move()
-        elif key == Qt.Key.Key_R:
-            self.restart()
-        elif key == Qt.Key.Key_Up:
-            current_speed = self.speed
-            new_speed = min(current_speed + 0.5, 10.0)
-            if new_speed != current_speed:
-                self.set_speed(new_speed)
-                self.control_panel.speed_slider.setValue(int(new_speed * 10))
-        elif key == Qt.Key.Key_Down:
-            current_speed = self.speed
-            new_speed = max(current_speed - 0.5, 0.1)
-            if new_speed != current_speed:
-                self.set_speed(new_speed)
-                self.control_panel.speed_slider.setValue(int(new_speed * 10))
-        elif key == Qt.Key.Key_H:
-            self.set_hot_reload(not self.auto_reload)
-            self.control_panel.hot_reload_btn.setChecked(self.auto_reload)
-        elif key == Qt.Key.Key_T:
-            self.set_real_time(not self.real_time_mode)
-            self.control_panel.real_time_btn.setChecked(self.real_time_mode)
         else:
             super().keyPressEvent(event)
+
+    def closeEvent(self, event):
+        if self.liskvork_process and self.liskvork_process.poll() is None:
+            try:
+                print("Terminating liskvork process...")
+                self.liskvork_process.terminate()
+                try:
+                    self.liskvork_process.wait(timeout=3)
+                    print("Liskvork process terminated gracefully")
+                except subprocess.TimeoutExpired:
+                    print("Process didn't terminate gracefully, force killing...")
+                    self.liskvork_process.kill()
+                    self.liskvork_process.wait(timeout=2)
+                    print("Liskvork process force killed")
+            except Exception as e:
+                print(f"Error terminating liskvork process: {e}")
+                try:
+                    self.liskvork_process.kill()
+                except:
+                    pass
+        event.accept()
 
     def load_replay(self, filename: str):
         try:
@@ -441,6 +437,30 @@ class GomokuVisualizer(QMainWindow):
             self.board_widget.update_board(self.moves, self.current_move)
             self.control_panel.update_status(self.current_move, len(self.moves), self.playing,
                                            self.moves[-1] if self.moves else None)
+
+    def launch_liskvork(self):
+        try:
+            liskvork_path = os.path.join(os.path.dirname(__file__), "..", "liskvork", "liskvork")
+            if not os.path.exists(liskvork_path):
+                self.status_bar.showMessage("Error: liskvork executable not found")
+                return
+
+            cmd = [liskvork_path]
+
+            self.status_bar.showMessage(f"Launching liskvork...")
+
+            project_root = os.path.join(os.path.dirname(__file__), "..")
+            with open(os.devnull, 'w') as devnull:
+                self.liskvork_process = subprocess.Popen(
+                    cmd,
+                    cwd=project_root,
+                    stdin=subprocess.DEVNULL,
+                    stdout=devnull,
+                    stderr=devnull
+                )
+
+        except Exception as e:
+            self.status_bar.showMessage(f"Error launching liskvork: {str(e)}")
 
     def check_file_changes(self):
         if not self.replay_file or not self.auto_reload or not os.path.exists(self.replay_file):
