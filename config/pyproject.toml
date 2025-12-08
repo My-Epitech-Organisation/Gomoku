@@ -57,5 +57,6 @@ exclude = '''
   | build
   | dist
   | migrations
+  | tests
 )/
 '''
