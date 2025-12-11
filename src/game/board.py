@@ -40,7 +40,7 @@ class Board:
         return True
 
     def remove_stone(self, x: int, y: int) -> None:
-        if self.is_valid_position(x, y):
+        if self.is_valid_position(x, y) and self.grid[y][x] != self.EMPTY:
             self.grid[y][x] = self.EMPTY
             self.move_count -= 1
 
