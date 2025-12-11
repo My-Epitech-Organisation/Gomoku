@@ -17,9 +17,6 @@ class Evaluator:
     TWO = 100  # Closed two
     ONE = 10  # Single stone
 
-    def __init__(self):
-        pass
-
     def evaluate_line(
         self, count: int, open_start: bool, open_end: bool
     ) -> int:
@@ -47,6 +44,8 @@ class Evaluator:
         elif count == 1:
             if both_open:
                 return self.ONE
+            else:
+                return 0
         return 0
 
     def evaluate_position(self, board: Board, x: int, y: int, player: int) -> int:
@@ -145,10 +144,11 @@ class Evaluator:
                     candidates.append((x, y))
 
         if not candidates:
-            center = board.width // 2
+            center_x = board.width // 2
+            center_y = board.height // 2
             for dy in range(-2, 3):
                 for dx in range(-2, 3):
-                    x, y = center + dx, center + dy
+                    x, y = center_x + dx, center_y + dy
                     if board.is_empty(x, y):
                         candidates.append((x, y))
 
