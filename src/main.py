@@ -8,6 +8,7 @@
 ##
 
 import sys
+from typing import Optional
 
 import constants
 from communication import CommunicationManager
@@ -16,8 +17,8 @@ from game import Board, MinMaxAI
 
 class GameContext:
     def __init__(self):
-        self.board: Board | None = None
-        self.ai: MinMaxAI | None = None
+        self.board: Optional[Board] = None
+        self.ai: Optional[MinMaxAI] = None
         self.player_stone = 1
         self.opponent_stone = 2
 
@@ -33,14 +34,34 @@ class GameContext:
         if self.board is None:
             return (0, 0)
 
+        if self.board.move_count > 0:
+            moves = self.board.get_valid_moves()
+            if moves:
+                x, y = moves[0]
+                self.board.place_stone(x, y, self.player_stone)
+                return (x, y)
+            return (0, 0)
+
         x = self.board.width // 2
         y = self.board.height // 2
-        self.board.place_stone(x, y, self.player_stone)
-        return (x, y)
+        if self.board.place_stone(x, y, self.player_stone):
+            return (x, y)
+
+        moves = self.board.get_valid_moves()
+        if moves:
+            x, y = moves[0]
+            self.board.place_stone(x, y, self.player_stone)
+            return (x, y)
+        return (0, 0)
 
     def process_opponent_move(self, x: int, y: int) -> None:
         if self.board is not None:
-            self.board.place_stone(x, y, self.opponent_stone)
+            if not self.board.place_stone(x, y, self.opponent_stone):
+                print(
+                    f"[WARNING] Invalid opponent move at ({x}, {y}): "
+                    "position already occupied or out of bounds.",
+                    file=sys.stderr,
+                )
 
     def get_best_move(self) -> tuple[int, int]:
         if self.board is None or self.ai is None:
