@@ -65,6 +65,10 @@ class TestBoard:
         # Modify copy shouldn't affect original
         copy.place_stone(11, 11, Board.OPPONENT)
         assert board.get_stone(11, 11) == Board.EMPTY
+        
+        # Modify original shouldn't affect copy
+        board.place_stone(12, 12, Board.PLAYER)
+        assert copy.get_stone(12, 12) == Board.EMPTY
 
     def test_valid_moves(self):
         """Test getting valid moves."""
