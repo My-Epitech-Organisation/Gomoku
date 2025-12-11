@@ -20,13 +20,13 @@ class TranspositionTable:
         self.max_size = max_size
 
     def get_hash(self, board: Board) -> int:
-        hash_val = 0
-        for y in range(board.height):
-            for x in range(board.width):
-                stone = board.get_stone(x, y)
-                if stone != Board.EMPTY:
-                    hash_val ^= (stone << (y * board.width + x))
-        return hash_val
+        # Use a tuple of all stone values in row-major order for robust hashing
+        stones = tuple(
+            board.get_stone(x, y)
+            for y in range(board.height)
+            for x in range(board.width)
+        )
+        return hash(stones)
 
     def store(
         self,
@@ -195,11 +195,10 @@ class MinMaxAI:
             self.transposition_table.store(board, depth, score)
             return score
 
-        if board.find_winning_move(current_player):
-            if current_player == player:
-                return Evaluator.FIVE + depth
-            else:
-                return -Evaluator.FIVE - depth
+        if board.find_winning_move(player):
+            return Evaluator.FIVE + depth
+        if board.find_winning_move(3 - player):
+            return -Evaluator.FIVE - depth
 
         moves = self.evaluator.get_strategic_moves(board, current_player, max_moves=12)
 
