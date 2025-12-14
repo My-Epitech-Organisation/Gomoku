@@ -7,45 +7,110 @@
 ## main
 ##
 
+import sys
+from typing import Optional
+
 import constants
 from communication import CommunicationManager
+from game import Board, MinMaxAI
 
 
 class GameContext:
     def __init__(self):
-        self.board = None
-        self.board_width = 0
-        self.board_height = 0
+        self.board: Optional[Board] = None
+        self.ai: Optional[MinMaxAI] = None
+        self.player_stone = 1
+        self.opponent_stone = 2
 
     def initialize_board(self, width: int, height: int) -> None:
-        self.board_width = width
-        self.board_height = height
-        self.board = [[0] * width for _ in range(height)]
+        self.board = Board(width, height)
+        self.ai = MinMaxAI(
+            max_depth=4,
+            time_limit=4.5,
+            use_iterative_deepening=True,
+        )
 
     def get_opening_move(self) -> tuple[int, int]:
-        x = self.board_width // 2
-        y = self.board_height // 2
-        self.board[y][x] = 1
-        return (x, y)
+        if self.board is None:
+            return (0, 0)
 
-    def process_opponent_move(self, x: int, y: int) -> None:
-        if 0 <= x < self.board_width and 0 <= y < self.board_height:
-            self.board[y][x] = 2
+        if self.board.move_count > 0:
+            moves = self.board.get_valid_moves()
+            if moves:
+                x, y = moves[0]
+                self.board.place_stone(x, y, self.player_stone)
+                return (x, y)
+            return (0, 0)
 
-    def get_best_move(self) -> tuple[int, int]:
-        for y in range(self.board_height):
-            for x in range(self.board_width):
-                if self.board[y][x] == 0:
-                    self.board[y][x] = 1
-                    return (x, y)
+        x = self.board.width // 2
+        y = self.board.height // 2
+        if self.board.place_stone(x, y, self.player_stone):
+            return (x, y)
+
+        moves = self.board.get_valid_moves()
+        if moves:
+            x, y = moves[0]
+            self.board.place_stone(x, y, self.player_stone)
+            return (x, y)
         return (0, 0)
 
+    def process_opponent_move(self, x: int, y: int) -> None:
+        if self.board is not None:
+            if not self.board.place_stone(x, y, self.opponent_stone):
+                print(
+                    f"[WARNING] Invalid opponent move at ({x}, {y}): "
+                    "position already occupied or out of bounds.",
+                    file=sys.stderr,
+                )
+
+    def get_best_move(self) -> tuple[int, int]:
+        if self.board is None or self.ai is None:
+            return (0, 0)
+
+        try:
+            move = self.ai.get_best_move(self.board, self.player_stone)
+
+            if move is None:
+                moves = self.board.get_valid_moves()
+                if moves:
+                    move = moves[0]
+                else:
+                    return (0, 0)
+
+            x, y = move
+            self.board.place_stone(x, y, self.player_stone)
+
+            # Log stats to stderr for debugging
+            stats = self.ai.get_stats()
+            print(
+                f"[AI] Nodes: {stats['nodes_searched']}, "
+                f"Time: {stats['time_elapsed']:.2f}s, "
+                f"NPS: {stats['nodes_per_second']}",
+                file=sys.stderr,
+            )
+
+            return (x, y)
+
+        except Exception as e:
+            print(f"[ERROR] AI failed: {e}", file=sys.stderr)
+            moves = self.board.get_valid_moves()
+            if moves:
+                x, y = moves[0]
+                self.board.place_stone(x, y, self.player_stone)
+                return (x, y)
+            return (0, 0)
+
     def process_board(self, moves: list) -> None:
-        self.board = [[0] * self.board_width for _ in range(self.board_height)]
+        if self.board is None:
+            return
+
+        self.board = Board(self.board.width, self.board.height)
+
         for move in moves:
             x, y = move.x, move.y
-            if 0 <= x < self.board_width and 0 <= y < self.board_height:
-                self.board[y][x] = move.stone_type
+            stone_type = move.stone_type
+            if self.board.is_valid_position(x, y):
+                self.board.place_stone(x, y, stone_type)
 
     def get_about_info(self) -> dict:
         return {
