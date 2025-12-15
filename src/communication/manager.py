@@ -77,6 +77,8 @@ class CommunicationManager:
     def _handle_start(self, command: Command) -> Response:
         try:
             size = command.params[constants.PARAM_SIZE]
+            if size <= 0:
+                return ErrorResponse("Invalid board size")
             if hasattr(self.context, constants.METHOD_INITIALIZE_BOARD):
                 self.context.initialize_board(size, size)
                 return OkResponse()
