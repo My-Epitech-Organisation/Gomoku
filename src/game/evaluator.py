@@ -114,12 +114,12 @@ class Evaluator:
             if opponent_threat >= 4:
                 high_priority_moves.append((9000000, (x, y)))
                 continue
-            elif player_threat >= 4:
+            if player_threat >= 4:
                 high_priority_moves.append((8000000, (x, y)))
                 continue
             if opponent_threat >= 3:
                 score = 1000000
-            elif player_threat >= 3:
+            if player_threat >= 3:
                 score = 500000
             else:
                 player_score = self.evaluate_position(board, x, y, player)
@@ -131,7 +131,6 @@ class Evaluator:
         if critical_moves:
             critical_moves.sort(key=lambda x: x[0], reverse=True)
             return [move for _, move in critical_moves]
-        
         if high_priority_moves:
             high_priority_moves.sort(key=lambda x: x[0], reverse=True)
             move_scores.sort(key=lambda x: x[0], reverse=True)
