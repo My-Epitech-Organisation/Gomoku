@@ -9,13 +9,13 @@ from .board import Board
 
 
 class Evaluator:
-    FIVE = 100000  # Win
-    FOUR = 10000  # Four in a row (immediate threat)
-    OPEN_THREE = 5000  # Open three (strong position)
-    THREE = 1000  # Closed three
-    OPEN_TWO = 500  # Open two
-    TWO = 100  # Closed two
-    ONE = 10  # Single stone
+    FIVE = 100000000        # Win - absolute priority
+    FOUR = 10000000         # Four in a row (immediate threat)
+    OPEN_THREE = 500000     # Open three (strong position)
+    THREE = 10000           # Closed three
+    OPEN_TWO = 1000         # Open two
+    TWO = 200               # Closed two
+    ONE = 10                # Single stone
 
     def evaluate_line(
         self, count: int, open_start: bool, open_end: bool
@@ -92,35 +92,51 @@ class Evaluator:
                     else:
                         opponent_score += line_score
 
-        # Slightly favor player (to encourage aggressive play)
-        return player_score - opponent_score * 1.1
+        return player_score - opponent_score * 1.5
 
     def order_moves(
         self, board: Board, moves: list[tuple[int, int]], player: int
     ) -> list[tuple[int, int]]:
         opponent = 3 - player
         move_scores = []
+        critical_moves = []
+        high_priority_moves = []
 
         for x, y in moves:
             player_threat = board.get_threat_level(x, y, player)
             opponent_threat = board.get_threat_level(x, y, opponent)
 
             if player_threat >= 5:
-                score = 1000000
-            elif opponent_threat >= 4:
-                score = 500000
+                return [(x, y)]
+            if opponent_threat >= 5:
+                critical_moves.append((10000000, (x, y)))
+                continue
+            if opponent_threat >= 4:
+                high_priority_moves.append((9000000, (x, y)))
+                continue
             elif player_threat >= 4:
-                score = 100000
-            elif opponent_threat >= 3:
-                score = 50000
+                high_priority_moves.append((8000000, (x, y)))
+                continue
+            if opponent_threat >= 3:
+                score = 1000000
             elif player_threat >= 3:
-                score = 10000
+                score = 500000
             else:
-                score = self.evaluate_position(board, x, y, player)
-                score += self.evaluate_position(board, x, y, opponent) * 0.5
+                player_score = self.evaluate_position(board, x, y, player)
+                opponent_score = self.evaluate_position(board, x, y, opponent)
+                score = player_score + opponent_score * 1.2
 
             move_scores.append((score, (x, y)))
 
+        if critical_moves:
+            critical_moves.sort(key=lambda x: x[0], reverse=True)
+            return [move for _, move in critical_moves]
+        
+        if high_priority_moves:
+            high_priority_moves.sort(key=lambda x: x[0], reverse=True)
+            move_scores.sort(key=lambda x: x[0], reverse=True)
+            return [move for _, move in high_priority_moves] + [move for _, move in move_scores]
+        
         move_scores.sort(key=lambda x: x[0], reverse=True)
         return [move for _, move in move_scores]
 
@@ -140,7 +156,7 @@ class Evaluator:
         candidates = []
         for y in range(board.height):
             for x in range(board.width):
-                if board.is_empty(x, y) and board.has_neighbor(x, y, distance=2):
+                if board.is_empty(x, y) and board.has_neighbor(x, y, distance=1):
                     candidates.append((x, y))
 
         if not candidates:
