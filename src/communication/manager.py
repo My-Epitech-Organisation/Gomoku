@@ -77,6 +77,9 @@ class CommunicationManager:
     def _handle_start(self, command: Command) -> Response:
         try:
             size = command.params[constants.PARAM_SIZE]
+            # If the board size is 0, exit gracefully with status 0
+            if size == 0:
+                sys.exit(0)
             if hasattr(self.context, constants.METHOD_INITIALIZE_BOARD):
                 self.context.initialize_board(size, size)
                 return OkResponse()

@@ -115,6 +115,11 @@ class TestCommunicationManager:
         assert responses[0].type == ResponseType.OK
         assert self.context.initialized
 
+    def test_process_command_start_size_zero_exits(self):
+        command = Command(CommandType.START, {"size": 0})
+        with pytest.raises(SystemExit) as excinfo:
+            self.manager.process_command(command)
+        assert excinfo.value.code == 0
     def test_process_command_start_no_context_method(self):
         # Create a context without the method to test error handling
         class MockContextNoInit:
