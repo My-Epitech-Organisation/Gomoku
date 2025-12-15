@@ -1,6 +1,7 @@
 # Gomoku .gitignore
 pbrain-gomoku-ai
 ruff_report.txt
+gomoku-evann-ai
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
