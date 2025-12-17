@@ -36,7 +36,6 @@ class MinMaxAI:
         def search_thread():
             start_time = time.time()
             current_best = None
-            current_value = -constants.INFINITY
 
             moves = board.get_valid_moves()
             if not moves:
@@ -48,13 +47,13 @@ class MinMaxAI:
                 move, value = self._search_at_depth(board, player, current_depth)
                 if move is not None:
                     current_best = move
-                    current_value = value
                     best_move[0] = current_best
                 current_depth += 1
 
             elapsed = time.time() - start_time
             print(
-                f"[AI] Stats: depth {current_depth-1}, nodes {self.nodes}, time {elapsed:.2f}s, aggressive {self.aggressive}",
+                f"[AI] Stats: depth {current_depth-1}, nodes {self.nodes}, "
+                f"time {elapsed:.2f}s, aggressive {self.aggressive}",
                 file=sys.stderr,
             )
 
@@ -183,7 +182,6 @@ class MinMaxAI:
 
     def _evaluate_line(self, line: str, player: int) -> int:
         player_str = str(player)
-        opponent_str = str(3 - player)
 
         patterns = {
             "five": player_str * 5,
