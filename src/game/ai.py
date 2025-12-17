@@ -22,7 +22,7 @@ class MinMaxAI:
         self.nodes = 0
 
     def get_best_move(self, board, player: int) -> Optional[Tuple[int, int]]:
-        self.aggressive = (board.move_count == 0)
+        self.aggressive = (board.move_count % 2 == 0)
         self.stop_search = False
         self.nodes = 0
         best_move = [None]
