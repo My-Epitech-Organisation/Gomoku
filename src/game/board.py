@@ -6,6 +6,7 @@
 ##
 
 from typing import List, Tuple
+
 from . import constants
 
 
@@ -39,7 +40,11 @@ class Board:
             for dy in range(-constants.MOVE_RADIUS, constants.MOVE_RADIUS + 1):
                 for dx in range(-constants.MOVE_RADIUS, constants.MOVE_RADIUS + 1):
                     nx, ny = x + dx, y + dy
-                    if 0 <= nx < self.width and 0 <= ny < self.height and self.grid[ny][nx] == 0:
+                    if (
+                        0 <= nx < self.width
+                        and 0 <= ny < self.height
+                        and self.grid[ny][nx] == 0
+                    ):
                         candidates.add((nx, ny))
 
         return list(candidates)
@@ -55,13 +60,21 @@ class Board:
             count = 1
 
             nx, ny = x + dx, y + dy
-            while 0 <= nx < self.width and 0 <= ny < self.height and self.grid[ny][nx] == player:
+            while (
+                0 <= nx < self.width
+                and 0 <= ny < self.height
+                and self.grid[ny][nx] == player
+            ):
                 count += 1
                 nx += dx
                 ny += dy
 
             nx, ny = x - dx, y - dy
-            while 0 <= nx < self.width and 0 <= ny < self.height and self.grid[ny][nx] == player:
+            while (
+                0 <= nx < self.width
+                and 0 <= ny < self.height
+                and self.grid[ny][nx] == player
+            ):
                 count += 1
                 nx -= dx
                 ny -= dy
@@ -69,7 +82,7 @@ class Board:
                 return True
         return False
 
-    def copy(self) -> 'Board':
+    def copy(self) -> "Board":
         new_board = Board(self.width, self.height)
         new_board.grid = [row[:] for row in self.grid]
         new_board.move_count = self.move_count

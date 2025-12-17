@@ -13,10 +13,10 @@ DEPTH_MID = 4
 DEPTH_LATE = 6
 
 DIRECTIONS = [
-    (1, 0), # horizontal
-    (0, 1), # vertical
-    (1, 1), # diagonal \
-    (1, -1) # diagonal /
+    (1, 0),  # horizontal
+    (0, 1),  # vertical
+    (1, 1),  # diagonal \
+    (1, -1),  # diagonal /
 ]
 
 

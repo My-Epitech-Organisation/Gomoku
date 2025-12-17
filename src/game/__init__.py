@@ -5,6 +5,6 @@
 ## game package
 ##
 
-from .board import Board
-from .ai import MinMaxAI
 from . import constants
+from .ai import MinMaxAI
+from .board import Board

@@ -12,7 +12,8 @@ from typing import Optional
 
 import constants
 from communication import CommunicationManager
-from game import Board, MinMaxAI, constants as game_constants
+from game import Board, MinMaxAI
+from game import constants as game_constants
 
 
 class GameContext:
