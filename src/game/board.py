@@ -9,7 +9,8 @@ from typing import Optional
 from .constants import (
     THREAT_LEVEL_WIN, THREAT_LEVEL_OPEN_FOUR,
     THREAT_LEVEL_CLOSED_FOUR, THREAT_LEVEL_OPEN_THREE,
-    THREAT_LEVEL_NORMAL, NEIGHBOR_SEARCH_DISTANCE, CENTER_SEARCH_RADIUS
+    THREAT_LEVEL_OPEN_TWO, THREAT_LEVEL_NORMAL,
+    NEIGHBOR_SEARCH_DISTANCE, CENTER_SEARCH_RADIUS
 )
 
 
@@ -106,7 +107,6 @@ class Board:
         return None
 
     def get_threat_level(self, x: int, y: int, player: int) -> int:
-        """Calculate the threat level of placing a stone at (x, y) for the given player."""
         if not self.is_empty(x, y):
             return 0
 
@@ -117,7 +117,6 @@ class Board:
             count, open_start, open_end = self.count_consecutive(x, y, dx, dy, player)
             both_open = open_start and open_end
 
-            # Determine threat level based on pattern
             if count >= 5:
                 threat = THREAT_LEVEL_WIN
             elif count == 4:
@@ -125,7 +124,7 @@ class Board:
             elif count == 3:
                 threat = THREAT_LEVEL_OPEN_THREE if both_open else THREAT_LEVEL_NORMAL
             elif count == 2:
-                threat = THREAT_LEVEL_NORMAL if both_open else 0
+                threat = THREAT_LEVEL_OPEN_TWO if both_open else 0
             else:
                 threat = 0
 
@@ -188,61 +187,42 @@ class Board:
         return False
 
     def detect_cross_pattern(self, x: int, y: int, player: int) -> int:
-        """Detect if placing a stone at (x,y) creates or blocks a cross pattern.
-
-        Returns a score indicating the danger/value of the cross pattern:
-        - 0: No cross pattern
-        - 1-3: Weak to strong cross patterns
-        """
         if not self.is_empty(x, y):
             return 0
 
-        # Check for cross pattern by counting threats in all directions
-        # A cross is dangerous when it creates multiple threats simultaneously
         self.place_stone(x, y, player)
 
         threats_count = 0
         has_open_line = False
 
-        # Check all 4 directions for potential threats
         for dx, dy in self.DIRECTIONS:
             count, open_start, open_end = self.count_consecutive(x, y, dx, dy, player)
             both_open = open_start and open_end
 
-            # Count lines that are at least 2 stones and have some openness
             if count >= 2:
                 if both_open:
-                    threats_count += 2  # Open line = 2 points
+                    threats_count += 2
                     has_open_line = True
                 elif open_start or open_end:
-                    threats_count += 1  # Semi-open = 1 point
+                    threats_count += 1
 
         self.remove_stone(x, y)
 
-        # Cross pattern detection:
-        # - 4+ threat points with at least one open line = strong cross (3)
-        # - 3+ threat points = medium cross (2)
-        # - 2+ threat points = weak cross (1)
         if threats_count >= 4 and has_open_line:
-            return 3  # Strong cross pattern
+            return 3
         elif threats_count >= 3:
-            return 2  # Medium cross pattern
+            return 2
         elif threats_count >= 2:
-            return 1  # Weak cross pattern
+            return 1
 
         return 0
 
     def find_cross_patterns(self, player: int) -> list[tuple[int, int, int]]:
-        """Find all positions where player has cross patterns.
-
-        Returns list of (x, y, strength) tuples sorted by strength.
-        """
         cross_positions = []
 
         for y in range(self.height):
             for x in range(self.width):
                 if self.grid[y][x] == player:
-                    # Check positions around this stone for cross patterns
                     for dy in range(-2, 3):
                         for dx in range(-2, 3):
                             nx, ny = x + dx, y + dy
@@ -251,7 +231,6 @@ class Board:
                                 if strength > 0:
                                     cross_positions.append((nx, ny, strength))
 
-        # Remove duplicates and sort by strength
         unique_crosses = {}
         for x, y, strength in cross_positions:
             if (x, y) not in unique_crosses or unique_crosses[(x, y)] < strength:
@@ -261,6 +240,68 @@ class Board:
         result.sort(key=lambda t: t[2], reverse=True)
 
         return result
+
+    def detect_t_pattern(self, x: int, y: int, player: int) -> bool:
+        if not self.is_empty(x, y):
+            return False
+
+        self.place_stone(x, y, player)
+
+        has_horizontal = False
+        has_vertical = False
+
+        h_count, h_open_start, h_open_end = self.count_consecutive(x, y, 1, 0, player)
+        if h_count >= 2 and (h_open_start or h_open_end):
+            has_horizontal = True
+
+        v_count, v_open_start, v_open_end = self.count_consecutive(x, y, 0, 1, player)
+        if v_count >= 2 and (v_open_start or v_open_end):
+            has_vertical = True
+
+        self.remove_stone(x, y)
+
+        return has_horizontal and has_vertical
+
+    def find_t_patterns(self, player: int) -> list[tuple[int, int]]:
+        t_positions = []
+
+        for y in range(self.height):
+            for x in range(self.width):
+                if self.grid[y][x] == player:
+                    for dy in range(-2, 3):
+                        for dx in range(-2, 3):
+                            nx, ny = x + dx, y + dy
+                            if self.is_empty(nx, ny) and self.detect_t_pattern(nx, ny, player):
+                                if (nx, ny) not in t_positions:
+                                    t_positions.append((nx, ny))
+
+        return t_positions
+
+    def find_open_two_threats(self, player: int) -> list[tuple[int, int]]:
+        threats = []
+
+        for y in range(self.height):
+            for x in range(self.width):
+                if not self.is_empty(x, y):
+                    continue
+
+                self.place_stone(x, y, player)
+
+                for dx, dy in self.DIRECTIONS:
+                    count, open_start, open_end = self.count_consecutive(x, y, dx, dy, player)
+
+                    if count == 2 and open_start and open_end:
+                        if (x, y) not in threats:
+                            threats.append((x, y))
+                        break
+
+                self.remove_stone(x, y)
+
+        return threats
+
+    def is_defensive_mode(self) -> bool:
+        from .constants import DEFENSIVE_MODE_MOVE_THRESHOLD
+        return self.move_count % 2 == 1 and self.move_count <= DEFENSIVE_MODE_MOVE_THRESHOLD * 2 + 1
 
     def __str__(self) -> str:
         lines = []

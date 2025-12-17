@@ -10,8 +10,10 @@ from .constants import (
     FIVE_IN_ROW, OPEN_FOUR, CLOSED_FOUR,
     OPEN_THREE, DOUBLE_OPEN_THREE, CLOSED_THREE,
     OPEN_TWO, CLOSED_TWO, SINGLE,
-    DEFENSE_MULTIPLIER, THREAT_LEVEL_WIN, THREAT_LEVEL_OPEN_FOUR,
+    DEFENSE_MULTIPLIER, DEFENSIVE_MODE_MULTIPLIER,
+    THREAT_LEVEL_WIN, THREAT_LEVEL_OPEN_FOUR,
     THREAT_LEVEL_CLOSED_FOUR, THREAT_LEVEL_OPEN_THREE,
+    THREAT_LEVEL_OPEN_TWO,
     MAX_CANDIDATE_MOVES
 )
 
@@ -160,10 +162,18 @@ class Evaluator:
         if player_threat >= THREAT_LEVEL_CLOSED_FOUR:
             return 50_000_000
 
+        if board.is_defensive_mode():
+            if opponent_threat >= THREAT_LEVEL_OPEN_TWO:
+                return 10_000_000
+            if player_threat >= THREAT_LEVEL_OPEN_TWO:
+                return 5_000_000
+
         player_score = self.evaluate_position(board, x, y, player)
         opponent_score = self.evaluate_position(board, x, y, opponent)
 
-        return player_score + opponent_score * DEFENSE_MULTIPLIER
+        current_defense_mult = DEFENSIVE_MODE_MULTIPLIER if board.is_defensive_mode() else DEFENSE_MULTIPLIER
+
+        return player_score + opponent_score * current_defense_mult
 
     def get_strategic_moves(
         self, board: Board, player: int, max_moves: int = MAX_CANDIDATE_MOVES

@@ -28,16 +28,20 @@ CLOSED_TWO = 10          # One end blocked
 # Single stone
 SINGLE = 1
 
-# Defense multiplier for opponent score evaluation
-# Defense is CRITICAL - we prioritize blocking over attacking
-DEFENSE_MULTIPLIER = 2.0
+# Defense multipliers
+DEFENSE_MULTIPLIER = 2.5  # Base defense multiplier
+DEFENSIVE_MODE_MULTIPLIER = 3.5  # When we're second player (extra defensive)
+
+# Defensive mode activation
+DEFENSIVE_MODE_MOVE_THRESHOLD = 2  # If opponent moved first, be defensive
 
 # Threat levels for move ordering
 THREAT_LEVEL_WIN = 5         # Five in a row
 THREAT_LEVEL_OPEN_FOUR = 4   # Open four
 THREAT_LEVEL_CLOSED_FOUR = 3 # Closed four or open three
 THREAT_LEVEL_OPEN_THREE = 2  # Open three or closed four
-THREAT_LEVEL_NORMAL = 1      # Other patterns
+THREAT_LEVEL_OPEN_TWO = 1    # Open two (defensive priority)
+THREAT_LEVEL_NORMAL = 0      # Other patterns
 
 # Search configuration
 MAX_CANDIDATE_MOVES = 20
