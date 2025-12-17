@@ -10,7 +10,7 @@ INFINITY = 1_000_000_000
 
 DEPTH_EARLY = 3
 DEPTH_MID = 4
-DEPTH_LATE = 3
+DEPTH_LATE = 6
 
 DIRECTIONS = [
     (1, 0), # horizontal
@@ -49,62 +49,16 @@ SCORE_OPEN_TWO = 300
 # X_X
 SCORE_CLOSED_TWO = 50
 
+ATTACK_MULTIPLIER_AGGRESSIVE = 1.2
+DEFENSE_MULTIPLIER_AGGRESSIVE = 0.8
+ATTACK_MULTIPLIER_DEFENSIVE = 0.8
+DEFENSE_MULTIPLIER_DEFENSIVE = 1.2
+
 DOUBLE_THREE_BONUS = 20_000
 DOUBLE_FOUR_BONUS = 50_000
 CENTER_CONTROL = 10
 
-## Priorities for move ordering
-# 5. Priorités de coup (Move Ordering)
-
-# Ordre strict recommandé :
-
-# Coup gagnant immédiat
-
-# Blocage d’un coup gagnant adverse
-
-# Création d’un open four
-
-# Blocage d’un open four adverse
-
-# Création d’un open three
-
-# Blocage d’un open three adverse
-
-# Autres patterns décroissants
-
 ATTACK_MULTIPLIER = 1.0
 DEFENSE_MULTIPLIER = 0.9
 
-## Evaluation method
-# eval =
-# ATTACK_MULTIPLIER * score(player)
-# - DEFENSE_MULTIPLIER * score(opponent)
-
-
-# 8. Masques de patterns (optimisation)
-
-# Chaque ligne analysée est transformée en chaîne :
-
-# 0 = bord
-# 1 = joueur
-# 2 = adversaire
-# 3 = vide
-
-# Exemple :
-
-# 0333310
-
-# Permet :
-
-# Hash rapide
-
-# Pattern matching
-
-# Tables pré-calculées
-
-
 MOVE_RADIUS = 2
-
-## Terminal values
-# if win(player): return +INFINITY - depth
-# if win(opponent): return -INFINITY + depth
