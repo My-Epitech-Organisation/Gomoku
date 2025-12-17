@@ -7,7 +7,7 @@
 
 import pytest
 
-from src.game import Board, Evaluator, NegaMaxAI
+from src.game import Board, Evaluator, NegaMaxAI, FIVE, CLOSED_FOUR, OPEN_FOUR, OPEN_THREE
 
 
 class TestNegaMaxAI:
@@ -74,19 +74,19 @@ class TestEvaluator:
 
         # Five in a row
         score = evaluator.evaluate_line(5, True, True)
-        assert score == Evaluator.FIVE
+        assert score == FIVE
 
         # Four in a row (closed)
         score = evaluator.evaluate_line(4, True, False)
-        assert score == Evaluator.CLOSED_FOUR
+        assert score == CLOSED_FOUR
 
         # Four in a row (open)
         score = evaluator.evaluate_line(4, True, True)
-        assert score == Evaluator.OPEN_FOUR
+        assert score == OPEN_FOUR
 
         # Open three
         score = evaluator.evaluate_line(3, True, True)
-        assert score == Evaluator.OPEN_THREE
+        assert score == OPEN_THREE
 
     def test_position_evaluation(self):
         """Test position evaluation."""

@@ -6,24 +6,14 @@
 ##
 
 from .board import Board
-
+from .constants import (
+    FIVE, OPPONENT_FIVE, OPEN_FOUR, BLOCK_OPEN_FOUR, OPEN_THREE,
+    DOUBLE_OPEN_THREE, CLOSED_FOUR, OPEN_TWO, CLOSED_TWO, SINGLE,
+    DEFENSE_MULTIPLIER, WIN_PRIORITY, BLOCK_WIN_PRIORITY,
+    BLOCK_OPEN4_PRIORITY, OPEN4_PRIORITY, BLOCK_OPEN3_PRIORITY, OPEN3_PRIORITY
+)
 
 class Evaluator:
-    FIVE = 1000000000
-    OPPONENT_FIVE = -1000000000
-
-    OPEN_FOUR = 100000
-    BLOCK_OPEN_FOUR = 90000
-
-    OPEN_THREE = 1000
-    DOUBLE_OPEN_THREE = 5000
-    CLOSED_FOUR = 30000
-
-    OPEN_TWO = 10
-    CLOSED_TWO = 5
-    SINGLE = 1
-
-    DEFENSE_MULTIPLIER = 1.0
 
     def evaluate_line(
         self, count: int, open_start: bool, open_end: bool
@@ -32,28 +22,28 @@ class Evaluator:
         one_open = open_start or open_end
 
         if count >= 5:
-            return self.FIVE
+            return FIVE
         elif count == 4:
             if both_open:
-                return self.OPEN_FOUR
+                return OPEN_FOUR
             elif one_open:
-                return self.CLOSED_FOUR
+                return CLOSED_FOUR
             return 0
         elif count == 3:
             if both_open:
-                return self.OPEN_THREE
+                return OPEN_THREE
             elif one_open:
                 return 100
             return 0
         elif count == 2:
             if both_open:
-                return self.OPEN_TWO
+                return OPEN_TWO
             elif one_open:
-                return self.CLOSED_TWO
+                return CLOSED_TWO
             return 0
         elif count == 1:
             if both_open:
-                return self.SINGLE
+                return SINGLE
             return 0
         return 0
 
@@ -81,10 +71,10 @@ class Evaluator:
         opponent_open_threes = 0
 
         if board.find_winning_move(player):
-            return self.FIVE
+            return FIVE
 
         if board.find_winning_move(opponent):
-            return self.OPPONENT_FIVE
+            return OPPONENT_FIVE
 
         for y in range(board.height):
             for x in range(board.width):
@@ -108,11 +98,11 @@ class Evaluator:
                             opponent_open_threes += 1
 
         if player_open_threes >= 2:
-            player_score += self.DOUBLE_OPEN_THREE
+            player_score += DOUBLE_OPEN_THREE
         if opponent_open_threes >= 2:
-            opponent_score += self.DOUBLE_OPEN_THREE
+            opponent_score += DOUBLE_OPEN_THREE
 
-        return player_score - int(opponent_score * self.DEFENSE_MULTIPLIER)
+        return player_score - int(opponent_score * DEFENSE_MULTIPLIER)
 
     def order_moves(
         self, board: Board, moves: list[tuple[int, int]], player: int
@@ -129,18 +119,18 @@ class Evaluator:
             if player_threat >= 5:
                 return [(x, y)]
             if opponent_threat >= 5:
-                critical_moves.append((10000000, (x, y)))
+                critical_moves.append((BLOCK_WIN_PRIORITY, (x, y)))
                 continue
             if opponent_threat >= 4:
-                high_priority_moves.append((9000000, (x, y)))
+                high_priority_moves.append((BLOCK_OPEN4_PRIORITY, (x, y)))
                 continue
             if player_threat >= 4:
-                high_priority_moves.append((8000000, (x, y)))
+                high_priority_moves.append((OPEN4_PRIORITY, (x, y)))
                 continue
             if opponent_threat >= 3:
-                score = 1000000
-            if player_threat >= 3:
-                score = 500000
+                score = BLOCK_OPEN3_PRIORITY
+            elif player_threat >= 3:
+                score = OPEN3_PRIORITY
             else:
                 player_score = self.evaluate_position(board, x, y, player)
                 opponent_score = self.evaluate_position(board, x, y, opponent)

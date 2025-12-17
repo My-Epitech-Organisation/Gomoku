@@ -12,6 +12,7 @@ from typing import Optional
 
 from .board import Board
 from .evaluator import Evaluator
+from .constants import FIVE
 
 
 def evaluate_move(board, move, depth, player, current_player):
@@ -109,12 +110,13 @@ class NegaMaxAI:
         self.start_time = 0.0
 
     def find_block_strong_threat(self, board: Board, opponent: int) -> Optional[tuple[int, int]]:
+        """Find a move that blocks opponent's strong threats (open 4 or open 3)."""
         threats = []
         for y in range(board.height):
             for x in range(board.width):
                 if board.is_empty(x, y):
                     threat = board.get_threat_level(x, y, opponent)
-                    if threat >= 3:
+                    if threat >= 3:  # Block open 4 and open 3
                         threats.append((threat, (x, y)))
 
         if threats:
@@ -156,7 +158,7 @@ class NegaMaxAI:
                     if move:
                         best_move = move
 
-                    if score >= Evaluator.FIVE:
+                    if score >= FIVE:
                         break
 
                 except TimeoutError:
@@ -217,7 +219,7 @@ class NegaMaxAI:
             return score
 
         if board.find_winning_move(current_player):
-            score = Evaluator.FIVE + depth if current_player == player else -Evaluator.FIVE - depth
+            score = FIVE + depth if current_player == player else -FIVE - depth
             self.transposition_table.store(board, depth, score)
             return score
 
