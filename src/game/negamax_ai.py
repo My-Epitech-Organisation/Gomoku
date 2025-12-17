@@ -12,7 +12,12 @@ from typing import Optional
 
 from .board import Board
 from .evaluator import Evaluator
-from .constants import FIVE
+from .constants import (
+    FIVE_IN_ROW, THREAT_LEVEL_OPEN_FOUR, THREAT_LEVEL_OPEN_THREE,
+    DEFAULT_TIME_LIMIT, DEFAULT_MAX_DEPTH, TT_MAX_SIZE,
+    MAX_KILLER_MOVES, TOP_MOVES_PARALLEL, MAX_MOVES_PER_DEPTH,
+    PARALLEL_WORKERS, PARALLEL_TIMEOUT
+)
 
 
 def evaluate_move(board, move, depth, player, current_player):
@@ -28,7 +33,7 @@ def evaluate_move(board, move, depth, player, current_player):
         return move, float('-inf')
 
 class TranspositionTable:
-    def __init__(self, max_size: int = 50000):
+    def __init__(self, max_size: int = TT_MAX_SIZE):
         self.table = {}
         self.max_size = max_size
 
@@ -71,9 +76,9 @@ class TranspositionTable:
 
 
 class KillerMoves:
-    def __init__(self, max_depth: int = 5):
+    def __init__(self, max_depth: int = DEFAULT_MAX_DEPTH):
         self.moves = [[] for _ in range(max_depth)]
-        self.max_killers = 2
+        self.max_killers = MAX_KILLER_MOVES
 
     def add(self, depth: int, move: tuple[int, int]) -> None:
         if depth >= len(self.moves):
@@ -96,8 +101,8 @@ class KillerMoves:
 class NegaMaxAI:
     def __init__(
         self,
-        max_depth: int = 5,
-        time_limit: float = 4.75,
+        max_depth: int = DEFAULT_MAX_DEPTH,
+        time_limit: float = DEFAULT_TIME_LIMIT,
         use_iterative_deepening: bool = True,
     ):
         self.max_depth = max_depth
@@ -109,46 +114,85 @@ class NegaMaxAI:
         self.killer_moves = KillerMoves(max_depth)
         self.start_time = 0.0
 
-    def find_block_strong_threat(self, board: Board, opponent: int) -> Optional[tuple[int, int]]:
-        """Find a move that blocks opponent's strong threats (open 4 or open 3)."""
-        threats = []
-        for y in range(board.height):
-            for x in range(board.width):
-                if board.is_empty(x, y):
-                    threat = board.get_threat_level(x, y, opponent)
-                    if threat >= 3:  # Block open 4 and open 3
-                        threats.append((threat, (x, y)))
-
-        if threats:
-            threats.sort(reverse=True)
-            return threats[0][1]
-        return None
-
     def is_time_up(self) -> bool:
         return time.time() - self.start_time >= self.time_limit
 
     def get_best_move(
         self, board: Board, player: int
     ) -> Optional[tuple[int, int]]:
+        """Find the best move using iterative deepening and full position evaluation."""
         self.start_time = time.time()
         self.nodes_searched = 0
         self.transposition_table.clear()
         self.killer_moves.clear()
 
+        opponent = 3 - player
+
+        # ALWAYS return immediately for immediate winning moves
         win_move = board.find_winning_move(player)
         if win_move:
             return win_move
 
-        opponent = 3 - player
-        block_move = board.find_winning_move(opponent)
-        if block_move:
-            return block_move
+        # ALWAYS block opponent's winning move FIRST
+        block_win = board.find_winning_move(opponent)
+        if block_win:
+            return block_win
 
-        block_threat = self.find_block_strong_threat(board, opponent)
-        if block_threat:
-            return block_threat
+        # Check for critical defensive threats (open 4 or open 3)
+        # These MUST be handled before any other consideration
+        for y in range(board.height):
+            for x in range(board.width):
+                if board.is_empty(x, y):
+                    opp_threat = board.get_threat_level(x, y, opponent)
+                    # Block opponent open four or open three IMMEDIATELY
+                    if opp_threat >= THREAT_LEVEL_OPEN_THREE:
+                        # But first check if WE can create an open four (instant win)
+                        our_threat = board.get_threat_level(x, y, player)
+                        if our_threat >= THREAT_LEVEL_OPEN_FOUR:
+                            continue  # We can win, don't block yet
+
+                        # Check if there's another position with opponent open four
+                        # (multiple threats mean we must block the most dangerous)
+                        if opp_threat >= THREAT_LEVEL_OPEN_FOUR:
+                            return (x, y)  # Block open four immediately
+
+        # Check again if we can create open four anywhere
+        for y in range(board.height):
+            for x in range(board.width):
+                if board.is_empty(x, y):
+                    our_threat = board.get_threat_level(x, y, player)
+                    if our_threat >= THREAT_LEVEL_OPEN_FOUR:
+                        return (x, y)  # Create our open four
+
+        # Check for dangerous cross patterns from opponent
+        opponent_crosses = board.find_cross_patterns(opponent)
+        if opponent_crosses:
+            # Block the strongest cross pattern
+            strongest_cross = opponent_crosses[0]
+            if strongest_cross[2] >= 2:  # Medium or strong cross
+                return (strongest_cross[0], strongest_cross[1])
+
+        # Now check if we MUST block an open three
+        best_defense = None
+        highest_opp_threat = 0
+        for y in range(board.height):
+            for x in range(board.width):
+                if board.is_empty(x, y):
+                    opp_threat = board.get_threat_level(x, y, opponent)
+                    if opp_threat > highest_opp_threat:
+                        highest_opp_threat = opp_threat
+                        best_defense = (x, y)
+
+        # If opponent has open three, we MUST block it
+        if highest_opp_threat >= THREAT_LEVEL_OPEN_THREE:
+            return best_defense
+
+        # Only now use the full search
+        best_move = None
+        best_score = float('-inf')
 
         if self.use_iterative_deepening:
+            # Iterative deepening: search with increasing depth
             for depth in range(1, self.max_depth + 1):
                 if self.is_time_up():
                     break
@@ -157,24 +201,31 @@ class NegaMaxAI:
                     move, score = self._search_with_depth(board, player, depth)
                     if move:
                         best_move = move
+                        best_score = score
 
-                    if score >= FIVE:
+                    # Stop if we found a certain win at this depth
+                    if score >= FIVE_IN_ROW - 100:
                         break
 
                 except TimeoutError:
                     break
         else:
-            best_move, _ = self._search_with_depth(board, player, self.max_depth)
+            best_move, best_score = self._search_with_depth(board, player, self.max_depth)
 
         return best_move
 
     def _search_with_depth(
         self, board: Board, player: int, depth: int
     ) -> tuple[Optional[tuple[int, int]], float]:
+        """Search for best move at given depth using parallel evaluation."""
         ordered_moves = self.evaluator.get_strategic_moves(board, player)
-        top_moves = ordered_moves[:8]
 
-        with concurrent.futures.ProcessPoolExecutor(max_workers=2) as executor:
+        # Increase the number of moves evaluated based on depth
+        num_moves = min(len(ordered_moves), TOP_MOVES_PARALLEL + depth)
+        top_moves = ordered_moves[:num_moves]
+
+        # Use parallel evaluation for top candidate moves
+        with concurrent.futures.ProcessPoolExecutor(max_workers=PARALLEL_WORKERS) as executor:
             futures = [
                 executor.submit(evaluate_move, board, move, depth, player, 3 - player)
                 for move in top_moves
@@ -185,7 +236,7 @@ class NegaMaxAI:
                 if self.is_time_up():
                     break
                 try:
-                    move, score = future.result(timeout=1)
+                    move, score = future.result(timeout=PARALLEL_TIMEOUT)
                     results.append((score, move))
                 except concurrent.futures.TimeoutError:
                     continue
@@ -219,11 +270,11 @@ class NegaMaxAI:
             return score
 
         if board.find_winning_move(current_player):
-            score = FIVE + depth if current_player == player else -FIVE - depth
+            score = FIVE_IN_ROW + depth if current_player == player else -FIVE_IN_ROW - depth
             self.transposition_table.store(board, depth, score)
             return score
 
-        moves = self.evaluator.get_strategic_moves(board, current_player, max_moves=12)
+        moves = self.evaluator.get_strategic_moves(board, current_player, max_moves=MAX_MOVES_PER_DEPTH)
 
         if not moves:
             score = self.evaluator.evaluate_board(board, player)

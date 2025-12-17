@@ -7,10 +7,12 @@
 
 from .board import Board
 from .constants import (
-    FIVE, OPPONENT_FIVE, OPEN_FOUR, BLOCK_OPEN_FOUR, OPEN_THREE,
-    DOUBLE_OPEN_THREE, CLOSED_FOUR, CLOSED_THREE, OPEN_TWO, CLOSED_TWO, SINGLE,
-    DEFENSE_MULTIPLIER, WIN_PRIORITY, BLOCK_WIN_PRIORITY,
-    BLOCK_OPEN4_PRIORITY, OPEN4_PRIORITY, BLOCK_OPEN3_PRIORITY, OPEN3_PRIORITY
+    FIVE_IN_ROW, OPEN_FOUR, CLOSED_FOUR,
+    OPEN_THREE, DOUBLE_OPEN_THREE, CLOSED_THREE,
+    OPEN_TWO, CLOSED_TWO, SINGLE,
+    DEFENSE_MULTIPLIER, THREAT_LEVEL_WIN, THREAT_LEVEL_OPEN_FOUR,
+    THREAT_LEVEL_CLOSED_FOUR, THREAT_LEVEL_OPEN_THREE,
+    MAX_CANDIDATE_MOVES
 )
 
 class Evaluator:
@@ -22,29 +24,15 @@ class Evaluator:
         one_open = open_start or open_end
 
         if count >= 5:
-            return FIVE
+            return FIVE_IN_ROW
         elif count == 4:
-            if both_open:
-                return OPEN_FOUR
-            elif one_open:
-                return CLOSED_FOUR
-            return 0
+            return OPEN_FOUR if both_open else (CLOSED_FOUR if one_open else 0)
         elif count == 3:
-            if both_open:
-                return OPEN_THREE
-            elif one_open:
-                return CLOSED_THREE
-            return 0
+            return OPEN_THREE if both_open else (CLOSED_THREE if one_open else 0)
         elif count == 2:
-            if both_open:
-                return OPEN_TWO
-            elif one_open:
-                return CLOSED_TWO
-            return 0
+            return OPEN_TWO if both_open else (CLOSED_TWO if one_open else 0)
         elif count == 1:
-            if both_open:
-                return SINGLE
-            return 0
+            return SINGLE if both_open else 0
         return 0
 
     def evaluate_position(self, board: Board, x: int, y: int, player: int) -> int:
@@ -69,12 +57,14 @@ class Evaluator:
         opponent_score = 0
         player_open_threes = 0
         opponent_open_threes = 0
+        player_open_fours = 0
+        opponent_open_fours = 0
 
         if board.find_winning_move(player):
-            return FIVE
+            return FIVE_IN_ROW
 
         if board.find_winning_move(opponent):
-            return OPPONENT_FIVE
+            return -FIVE_IN_ROW
 
         for y in range(board.height):
             for x in range(board.width):
@@ -86,21 +76,32 @@ class Evaluator:
                     count, open_start, open_end = board.count_consecutive(
                         x, y, dx, dy, stone
                     )
+                    both_open = open_start and open_end
                     line_score = self.evaluate_line(count, open_start, open_end)
 
                     if stone == player:
                         player_score += line_score
-                        if count == 3 and open_start and open_end:
+                        if count == 4 and both_open:
+                            player_open_fours += 1
+                        elif count == 3 and both_open:
                             player_open_threes += 1
                     else:
                         opponent_score += line_score
-                        if count == 3 and open_start and open_end:
+                        if count == 4 and both_open:
+                            opponent_open_fours += 1
+                        elif count == 3 and both_open:
                             opponent_open_threes += 1
 
         if player_open_threes >= 2:
             player_score += DOUBLE_OPEN_THREE
         if opponent_open_threes >= 2:
             opponent_score += DOUBLE_OPEN_THREE
+
+        if opponent_open_fours > 0:
+            opponent_score += OPEN_FOUR * 3
+
+        if opponent_open_threes > 0:
+            opponent_score += OPEN_THREE * 10
 
         return player_score - int(opponent_score * DEFENSE_MULTIPLIER)
 
@@ -109,48 +110,63 @@ class Evaluator:
     ) -> list[tuple[int, int]]:
         opponent = 3 - player
         move_scores = []
-        critical_moves = []
-        high_priority_moves = []
 
         for x, y in moves:
             player_threat = board.get_threat_level(x, y, player)
             opponent_threat = board.get_threat_level(x, y, opponent)
 
-            if player_threat >= 5:
+            if player_threat >= THREAT_LEVEL_WIN:
                 return [(x, y)]
-            if opponent_threat >= 5:
-                critical_moves.append((BLOCK_WIN_PRIORITY, (x, y)))
-                continue
-            if opponent_threat >= 4:
-                high_priority_moves.append((BLOCK_OPEN4_PRIORITY, (x, y)))
-                continue
-            if player_threat >= 4:
-                high_priority_moves.append((OPEN4_PRIORITY, (x, y)))
-                continue
-            if opponent_threat >= 3:
-                score = BLOCK_OPEN3_PRIORITY
-            elif player_threat >= 3:
-                score = OPEN3_PRIORITY
-            else:
-                player_score = self.evaluate_position(board, x, y, player)
-                opponent_score = self.evaluate_position(board, x, y, opponent)
-                score = player_score + opponent_score * 1.2
 
+            score = self._calculate_move_score(
+                board, x, y, player, opponent, player_threat, opponent_threat
+            )
             move_scores.append((score, (x, y)))
-
-        if critical_moves:
-            critical_moves.sort(key=lambda x: x[0], reverse=True)
-            return [move for _, move in critical_moves]
-        if high_priority_moves:
-            high_priority_moves.sort(key=lambda x: x[0], reverse=True)
-            move_scores.sort(key=lambda x: x[0], reverse=True)
-            return [move for _, move in high_priority_moves] + [move for _, move in move_scores]
 
         move_scores.sort(key=lambda x: x[0], reverse=True)
         return [move for _, move in move_scores]
 
+    def _calculate_move_score(
+        self,
+        board: Board,
+        x: int,
+        y: int,
+        player: int,
+        opponent: int,
+        player_threat: int,
+        opponent_threat: int
+    ) -> float:
+        if player_threat >= THREAT_LEVEL_WIN:
+            return 10_000_000_000
+
+        if opponent_threat >= THREAT_LEVEL_WIN:
+            return 9_000_000_000
+
+        if opponent_threat >= THREAT_LEVEL_OPEN_FOUR:
+            return 5_000_000_000
+
+        if player_threat >= THREAT_LEVEL_OPEN_FOUR:
+            return 4_000_000_000
+
+        if opponent_threat >= THREAT_LEVEL_OPEN_THREE:
+            return 1_000_000_000
+
+        if player_threat >= THREAT_LEVEL_OPEN_THREE:
+            return 500_000_000
+
+        if opponent_threat >= THREAT_LEVEL_CLOSED_FOUR:
+            return 100_000_000
+
+        if player_threat >= THREAT_LEVEL_CLOSED_FOUR:
+            return 50_000_000
+
+        player_score = self.evaluate_position(board, x, y, player)
+        opponent_score = self.evaluate_position(board, x, y, opponent)
+
+        return player_score + opponent_score * DEFENSE_MULTIPLIER
+
     def get_strategic_moves(
-        self, board: Board, player: int, max_moves: int = 15
+        self, board: Board, player: int, max_moves: int = MAX_CANDIDATE_MOVES
     ) -> list[tuple[int, int]]:
         opponent = 3 - player
 

@@ -5,26 +5,53 @@
 ## Constants for scoring and priorities
 ##
 
-FIVE = 1000000000
-OPPONENT_FIVE = -1000000000
+# Winning/Losing conditions
+WIN_SCORE = 1_000_000_000
+LOSE_SCORE = -WIN_SCORE
 
-OPEN_FOUR = 100000
-BLOCK_OPEN_FOUR = 90000
+# Pattern scores
+FIVE_IN_ROW = WIN_SCORE
 
-OPEN_THREE = 1000
-DOUBLE_OPEN_THREE = 5000
-CLOSED_FOUR = 30000
-CLOSED_THREE = 100
+# Four in a row patterns
+OPEN_FOUR = 500_000      # Can win next move
+CLOSED_FOUR = 10_000     # One end blocked
 
-OPEN_TWO = 10
-CLOSED_TWO = 5
+# Three in a row patterns
+OPEN_THREE = 5_000       # Can become open four
+DOUBLE_OPEN_THREE = 50_000  # Two open threes = guaranteed win
+CLOSED_THREE = 500       # One end blocked
+
+# Two in a row patterns
+OPEN_TWO = 100           # Can become open three
+CLOSED_TWO = 10          # One end blocked
+
+# Single stone
 SINGLE = 1
 
-DEFENSE_MULTIPLIER = 1.0
+# Defense multiplier for opponent score evaluation
+# Defense is CRITICAL - we prioritize blocking over attacking
+DEFENSE_MULTIPLIER = 2.0
 
-WIN_PRIORITY = 10000000
-BLOCK_WIN_PRIORITY = 10000000
-BLOCK_OPEN4_PRIORITY = 9000000
-OPEN4_PRIORITY = 8000000
-BLOCK_OPEN3_PRIORITY = 400000
-OPEN3_PRIORITY = 500000
+# Threat levels for move ordering
+THREAT_LEVEL_WIN = 5         # Five in a row
+THREAT_LEVEL_OPEN_FOUR = 4   # Open four
+THREAT_LEVEL_CLOSED_FOUR = 3 # Closed four or open three
+THREAT_LEVEL_OPEN_THREE = 2  # Open three or closed four
+THREAT_LEVEL_NORMAL = 1      # Other patterns
+
+# Search configuration
+MAX_CANDIDATE_MOVES = 20
+TOP_MOVES_PARALLEL = 10
+MAX_MOVES_PER_DEPTH = 15
+NEIGHBOR_SEARCH_DISTANCE = 2
+CENTER_SEARCH_RADIUS = 2
+
+# Time management
+DEFAULT_TIME_LIMIT = 4.75
+DEFAULT_MAX_DEPTH = 8
+PARALLEL_WORKERS = 2
+PARALLEL_TIMEOUT = 1.0
+
+# Transposition table
+TT_MAX_SIZE = 50_000
+MAX_KILLER_MOVES = 2

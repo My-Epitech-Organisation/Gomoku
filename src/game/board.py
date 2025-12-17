@@ -6,6 +6,11 @@
 ##
 
 from typing import Optional
+from .constants import (
+    THREAT_LEVEL_WIN, THREAT_LEVEL_OPEN_FOUR,
+    THREAT_LEVEL_CLOSED_FOUR, THREAT_LEVEL_OPEN_THREE,
+    THREAT_LEVEL_NORMAL, NEIGHBOR_SEARCH_DISTANCE, CENTER_SEARCH_RADIUS
+)
 
 
 class Board:
@@ -101,6 +106,7 @@ class Board:
         return None
 
     def get_threat_level(self, x: int, y: int, player: int) -> int:
+        """Calculate the threat level of placing a stone at (x, y) for the given player."""
         if not self.is_empty(x, y):
             return 0
 
@@ -109,17 +115,17 @@ class Board:
 
         for dx, dy in self.DIRECTIONS:
             count, open_start, open_end = self.count_consecutive(x, y, dx, dy, player)
+            both_open = open_start and open_end
 
+            # Determine threat level based on pattern
             if count >= 5:
-                threat = 5
+                threat = THREAT_LEVEL_WIN
             elif count == 4:
-                threat = 4
-            elif count == 3 and (open_start and open_end):
-                threat = 3
+                threat = THREAT_LEVEL_OPEN_FOUR if both_open else THREAT_LEVEL_CLOSED_FOUR
             elif count == 3:
-                threat = 2
+                threat = THREAT_LEVEL_OPEN_THREE if both_open else THREAT_LEVEL_NORMAL
             elif count == 2:
-                threat = 1
+                threat = THREAT_LEVEL_NORMAL if both_open else 0
             else:
                 threat = 0
 
@@ -128,7 +134,7 @@ class Board:
         self.remove_stone(x, y)
         return max_threat
 
-    def get_occupied_region(self, margin: int = 2) -> tuple[int, int, int, int]:
+    def get_occupied_region(self, margin: int = NEIGHBOR_SEARCH_DISTANCE) -> tuple[int, int, int, int]:
         min_x, min_y = self.width, self.height
         max_x, max_y = -1, -1
 
@@ -168,7 +174,7 @@ class Board:
 
         return moves
 
-    def has_neighbor(self, x: int, y: int, distance: int = 1) -> bool:
+    def has_neighbor(self, x: int, y: int, distance: int = NEIGHBOR_SEARCH_DISTANCE) -> bool:
         for dy in range(-distance, distance + 1):
             for dx in range(-distance, distance + 1):
                 if dx == 0 and dy == 0:
@@ -180,6 +186,81 @@ class Board:
                 ):
                     return True
         return False
+
+    def detect_cross_pattern(self, x: int, y: int, player: int) -> int:
+        """Detect if placing a stone at (x,y) creates or blocks a cross pattern.
+
+        Returns a score indicating the danger/value of the cross pattern:
+        - 0: No cross pattern
+        - 1-3: Weak to strong cross patterns
+        """
+        if not self.is_empty(x, y):
+            return 0
+
+        # Check for cross pattern by counting threats in all directions
+        # A cross is dangerous when it creates multiple threats simultaneously
+        self.place_stone(x, y, player)
+
+        threats_count = 0
+        has_open_line = False
+
+        # Check all 4 directions for potential threats
+        for dx, dy in self.DIRECTIONS:
+            count, open_start, open_end = self.count_consecutive(x, y, dx, dy, player)
+            both_open = open_start and open_end
+
+            # Count lines that are at least 2 stones and have some openness
+            if count >= 2:
+                if both_open:
+                    threats_count += 2  # Open line = 2 points
+                    has_open_line = True
+                elif open_start or open_end:
+                    threats_count += 1  # Semi-open = 1 point
+
+        self.remove_stone(x, y)
+
+        # Cross pattern detection:
+        # - 4+ threat points with at least one open line = strong cross (3)
+        # - 3+ threat points = medium cross (2)
+        # - 2+ threat points = weak cross (1)
+        if threats_count >= 4 and has_open_line:
+            return 3  # Strong cross pattern
+        elif threats_count >= 3:
+            return 2  # Medium cross pattern
+        elif threats_count >= 2:
+            return 1  # Weak cross pattern
+
+        return 0
+
+    def find_cross_patterns(self, player: int) -> list[tuple[int, int, int]]:
+        """Find all positions where player has cross patterns.
+
+        Returns list of (x, y, strength) tuples sorted by strength.
+        """
+        cross_positions = []
+
+        for y in range(self.height):
+            for x in range(self.width):
+                if self.grid[y][x] == player:
+                    # Check positions around this stone for cross patterns
+                    for dy in range(-2, 3):
+                        for dx in range(-2, 3):
+                            nx, ny = x + dx, y + dy
+                            if self.is_empty(nx, ny):
+                                strength = self.detect_cross_pattern(nx, ny, player)
+                                if strength > 0:
+                                    cross_positions.append((nx, ny, strength))
+
+        # Remove duplicates and sort by strength
+        unique_crosses = {}
+        for x, y, strength in cross_positions:
+            if (x, y) not in unique_crosses or unique_crosses[(x, y)] < strength:
+                unique_crosses[(x, y)] = strength
+
+        result = [(x, y, s) for (x, y), s in unique_crosses.items()]
+        result.sort(key=lambda t: t[2], reverse=True)
+
+        return result
 
     def __str__(self) -> str:
         lines = []
