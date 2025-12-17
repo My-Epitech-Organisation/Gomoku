@@ -25,7 +25,7 @@ class MinMaxAI:
         self.aggressive = (board.move_count == 0)
         self.stop_search = False
         self.nodes = 0
-        best_move = [None]  # Use list to modify in thread
+        best_move = [None]
 
         def search_thread():
             start_time = time.time()
@@ -153,14 +153,13 @@ class MinMaxAI:
                 stone = board.grid[ny][nx]
                 line.append(str(stone) if stone != 0 else '.')
             else:
-                line.append('#')  # Wall
+                line.append('#')
         return ''.join(line)
 
     def _evaluate_line(self, line: str, player: int) -> int:
         player_str = str(player)
         opponent_str = str(3 - player)
 
-        # Patterns for the player
         patterns = {
             'five': player_str * 5,
             'open_four': f'.{player_str * 4}.',
@@ -201,8 +200,7 @@ class MinMaxAI:
         best_value = -constants.INFINITY
 
         moves = board.get_valid_moves()
-        # Move ordering: sort by heuristic score
-        moves = sorted(moves, key=lambda m: -self._move_heuristic(board, m, player))[:20]  # Top 20
+        moves = sorted(moves, key=lambda m: -self._move_heuristic(board, m, player))[:20]
 
         for move in moves:
             board_copy = board.copy()

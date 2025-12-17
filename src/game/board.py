@@ -25,7 +25,6 @@ class Board:
 
     def get_valid_moves(self) -> List[Tuple[int, int]]:
         if self.move_count == 0:
-            # First move, center
             center_x, center_y = self.width // 2, self.height // 2
             return [(center_x, center_y)]
 
@@ -54,13 +53,13 @@ class Board:
     def check_win(self, x: int, y: int, player: int) -> bool:
         for dx, dy in constants.DIRECTIONS:
             count = 1
-            # Check positive direction
+
             nx, ny = x + dx, y + dy
             while 0 <= nx < self.width and 0 <= ny < self.height and self.grid[ny][nx] == player:
                 count += 1
                 nx += dx
                 ny += dy
-            # Check negative direction
+
             nx, ny = x - dx, y - dy
             while 0 <= nx < self.width and 0 <= ny < self.height and self.grid[ny][nx] == player:
                 count += 1
@@ -69,10 +68,6 @@ class Board:
             if count >= constants.WIN_LENGTH:
                 return True
         return False
-
-    def evaluate(self) -> int:
-        # Simple evaluation: count stones or something, but for now, placeholder
-        return 0  # To be implemented based on constants scores
 
     def copy(self) -> 'Board':
         new_board = Board(self.width, self.height)
