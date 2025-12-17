@@ -5,9 +5,9 @@
 ## constants
 ##
 
-BRAIN_NAME = "pbrain-gomoku-ai"
-BRAIN_VERSION = "1.0"
-BRAIN_AUTHOR = "AI"
+BRAIN_NAME = "Gomokucaracha"
+BRAIN_VERSION = "6.7"
+BRAIN_AUTHOR = "Les Muchachos"
 BRAIN_COUNTRY = "FR"
 
 ABOUT_FIELD_NAME = "name"

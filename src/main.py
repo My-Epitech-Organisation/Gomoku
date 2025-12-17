@@ -67,38 +67,11 @@ class GameContext:
         if self.board is None or self.ai is None:
             return (0, 0)
 
-        try:
-            move = self.ai.get_best_move(self.board, self.player_stone)
-
-            if move is None:
-                moves = self.board.get_valid_moves()
-                if moves:
-                    move = moves[0]
-                else:
-                    return (0, 0)
-
-            x, y = move
-            self.board.place_stone(x, y, self.player_stone)
-
-            # Log stats to stderr for debugging
-            stats = self.ai.get_stats()
-            print(
-                f"[AI] Nodes: {stats['nodes_searched']}, "
-                f"Time: {stats['time_elapsed']:.2f}s, "
-                f"NPS: {stats['nodes_per_second']}",
-                file=sys.stderr,
-            )
-
-            return (x, y)
-
-        except Exception as e:
-            print(f"[ERROR] AI failed: {e}", file=sys.stderr)
-            moves = self.board.get_valid_moves()
-            if moves:
-                x, y = moves[0]
-                self.board.place_stone(x, y, self.player_stone)
-                return (x, y)
-            return (0, 0)
+        move = self.ai.get_best_move(self.board, self.player_stone)
+        if move:
+            self.board.place_stone(move[0], move[1], self.player_stone)
+            return move
+        return (0, 0)
 
     def process_board(self, moves: list) -> None:
         if self.board is None:
