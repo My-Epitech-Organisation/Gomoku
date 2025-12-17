@@ -12,21 +12,21 @@ from typing import Optional
 
 import constants
 from communication import CommunicationManager
-from game import Board, MinMaxAI
+from game import Board, NegaMaxAI
 
 
 class GameContext:
     def __init__(self):
         self.board: Optional[Board] = None
-        self.ai: Optional[MinMaxAI] = None
+        self.ai: Optional[NegaMaxAI] = None
         self.player_stone = 1
         self.opponent_stone = 2
 
     def initialize_board(self, width: int, height: int) -> None:
         self.board = Board(width, height)
-        self.ai = MinMaxAI(
+        self.ai = NegaMaxAI(
             max_depth=4,
-            time_limit=4.5,
+            time_limit=4.75,
             use_iterative_deepening=True,
         )
 

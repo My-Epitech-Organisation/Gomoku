@@ -9,13 +9,21 @@ from .board import Board
 
 
 class Evaluator:
-    FIVE = 100000000        # Win - absolute priority
-    FOUR = 10000000         # Four in a row (immediate threat)
-    OPEN_THREE = 500000     # Open three (strong position)
-    THREE = 10000           # Closed three
-    OPEN_TWO = 1000         # Open two
-    TWO = 200               # Closed two
-    ONE = 10                # Single stone
+    FIVE = 1000000000
+    OPPONENT_FIVE = -1000000000
+
+    OPEN_FOUR = 100000
+    BLOCK_OPEN_FOUR = 90000
+
+    OPEN_THREE = 1000
+    DOUBLE_OPEN_THREE = 5000
+    CLOSED_FOUR = 30000
+
+    OPEN_TWO = 10
+    CLOSED_TWO = 5
+    SINGLE = 1
+
+    DEFENSE_MULTIPLIER = 1.0
 
     def evaluate_line(
         self, count: int, open_start: bool, open_end: bool
@@ -26,26 +34,27 @@ class Evaluator:
         if count >= 5:
             return self.FIVE
         elif count == 4:
-            if one_open:
-                return self.FOUR
+            if both_open:
+                return self.OPEN_FOUR
+            elif one_open:
+                return self.CLOSED_FOUR
             return 0
         elif count == 3:
             if both_open:
                 return self.OPEN_THREE
             elif one_open:
-                return self.THREE
+                return 100
             return 0
         elif count == 2:
             if both_open:
                 return self.OPEN_TWO
             elif one_open:
-                return self.TWO
+                return self.CLOSED_TWO
             return 0
         elif count == 1:
             if both_open:
-                return self.ONE
-            else:
-                return 0
+                return self.SINGLE
+            return 0
         return 0
 
     def evaluate_position(self, board: Board, x: int, y: int, player: int) -> int:
@@ -68,12 +77,14 @@ class Evaluator:
         opponent = 3 - player
         player_score = 0
         opponent_score = 0
+        player_open_threes = 0
+        opponent_open_threes = 0
 
         if board.find_winning_move(player):
             return self.FIVE
 
         if board.find_winning_move(opponent):
-            return -self.FIVE
+            return self.OPPONENT_FIVE
 
         for y in range(board.height):
             for x in range(board.width):
@@ -89,10 +100,19 @@ class Evaluator:
 
                     if stone == player:
                         player_score += line_score
+                        if count == 3 and open_start and open_end:
+                            player_open_threes += 1
                     else:
                         opponent_score += line_score
+                        if count == 3 and open_start and open_end:
+                            opponent_open_threes += 1
 
-        return player_score - opponent_score * 1.5
+        if player_open_threes >= 2:
+            player_score += self.DOUBLE_OPEN_THREE
+        if opponent_open_threes >= 2:
+            opponent_score += self.DOUBLE_OPEN_THREE
+
+        return player_score - int(opponent_score * self.DEFENSE_MULTIPLIER)
 
     def order_moves(
         self, board: Board, moves: list[tuple[int, int]], player: int
@@ -135,7 +155,7 @@ class Evaluator:
             high_priority_moves.sort(key=lambda x: x[0], reverse=True)
             move_scores.sort(key=lambda x: x[0], reverse=True)
             return [move for _, move in high_priority_moves] + [move for _, move in move_scores]
-        
+
         move_scores.sort(key=lambda x: x[0], reverse=True)
         return [move for _, move in move_scores]
 

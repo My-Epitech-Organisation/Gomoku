@@ -7,6 +7,6 @@
 
 from .board import Board
 from .evaluator import Evaluator
-from .minmax_ai import MinMaxAI
+from .negamax_ai import NegaMaxAI
 
-__all__ = ["Board", "Evaluator", "MinMaxAI"]
+__all__ = ["Board", "Evaluator", "NegaMaxAI"]
