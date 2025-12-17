@@ -2,6 +2,7 @@
 pbrain-gomoku-ai
 ruff_report.txt
 gomoku-evann-ai
+pbrain-marin-ai
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
