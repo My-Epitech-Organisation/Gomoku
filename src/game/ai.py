@@ -13,20 +13,22 @@ from . import constants
 
 
 class MinMaxAI:
-    def __init__(self, max_depth: int = 4, time_limit: float = 5.0, use_iterative_deepening: bool = True):
+    def __init__(self, max_depth: int = constants.MAX_DEPTH, time_limit: float = constants.TIME_LIMIT, use_iterative_deepening: bool = True):
         self.max_depth = max_depth
         self.time_limit = time_limit
         self.use_iterative_deepening = use_iterative_deepening
         self.stop_search = False
         self.aggressive = True
+        self.nodes = 0
 
     def get_best_move(self, board, player: int) -> Optional[Tuple[int, int]]:
-        print(f"Starting search for player {player}, moves: {len(board.get_valid_moves())}, aggressive: {self.aggressive}", file=sys.stderr)
         self.aggressive = (board.move_count == 0)
         self.stop_search = False
+        self.nodes = 0
         best_move = [None]  # Use list to modify in thread
 
         def search_thread():
+            start_time = time.time()
             current_best = None
             current_value = -constants.INFINITY
 
@@ -34,26 +36,24 @@ class MinMaxAI:
             if not moves:
                 return
 
-            max_depth = self._get_depth(board.move_count)
             current_depth = 1
 
-            while current_depth <= max_depth and not self.stop_search:
-                print(f"Searching at depth {current_depth}", file=sys.stderr)
+            while not self.stop_search:
                 move, value = self._search_at_depth(board, player, current_depth)
                 if move is not None:
                     current_best = move
                     current_value = value
                     best_move[0] = current_best
-                    print(f"Best move at depth {current_depth}: {current_best}, value: {current_value}", file=sys.stderr)
                 current_depth += 1
 
-            print(f"Search thread stopped", file=sys.stderr)
+            elapsed = time.time() - start_time
+            print(f"[AI] Stats: depth {current_depth-1}, nodes {self.nodes}, time {elapsed:.2f}s, aggressive {self.aggressive}", file=sys.stderr)
 
         thread = threading.Thread(target=search_thread)
+        thread.daemon = True
         thread.start()
         time.sleep(self.time_limit)
         self.stop_search = True
-        print(f"Final move: {best_move[0]}", file=sys.stderr)
         return best_move[0]
 
     def _get_best_move_fixed_depth(self, board, player: int) -> Optional[Tuple[int, int]]:
@@ -105,6 +105,7 @@ class MinMaxAI:
     def negamax(self, board, depth: int, alpha: int, beta: int, current_player: int) -> int:
         if self.stop_search:
             return 0
+        self.nodes += 1
         if depth == 0 or board.is_full():
             return self.evaluate(board) * (1 if current_player == 1 else -1)
 

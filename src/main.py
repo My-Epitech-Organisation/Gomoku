@@ -12,7 +12,7 @@ from typing import Optional
 
 import constants
 from communication import CommunicationManager
-from game import Board, MinMaxAI
+from game import Board, MinMaxAI, constants as game_constants
 
 
 class GameContext:
@@ -25,8 +25,8 @@ class GameContext:
     def initialize_board(self, width: int, height: int) -> None:
         self.board = Board(width, height)
         self.ai = MinMaxAI(
-            max_depth=4,
-            time_limit=4.5,
+            max_depth=game_constants.MAX_DEPTH,
+            time_limit=game_constants.TIME_LIMIT,
             use_iterative_deepening=True,
         )
 
