@@ -8,7 +8,7 @@
 from .board import Board
 from .constants import (
     FIVE, OPPONENT_FIVE, OPEN_FOUR, BLOCK_OPEN_FOUR, OPEN_THREE,
-    DOUBLE_OPEN_THREE, CLOSED_FOUR, OPEN_TWO, CLOSED_TWO, SINGLE,
+    DOUBLE_OPEN_THREE, CLOSED_FOUR, CLOSED_THREE, OPEN_TWO, CLOSED_TWO, SINGLE,
     DEFENSE_MULTIPLIER, WIN_PRIORITY, BLOCK_WIN_PRIORITY,
     BLOCK_OPEN4_PRIORITY, OPEN4_PRIORITY, BLOCK_OPEN3_PRIORITY, OPEN3_PRIORITY
 )
@@ -33,7 +33,7 @@ class Evaluator:
             if both_open:
                 return OPEN_THREE
             elif one_open:
-                return 100
+                return CLOSED_THREE
             return 0
         elif count == 2:
             if both_open:
