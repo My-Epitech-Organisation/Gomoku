@@ -208,7 +208,7 @@ class MinMaxAI:
     def _evaluate_line(self, line: str, player: int) -> int:
         player_str = str(player)
 
-        patterns = constants.get_patterns(player)
+        patterns = constants.PATTERNS[player]
 
         score = 0
 
@@ -309,7 +309,7 @@ class MinMaxAI:
         threat_count = 0
         for dx, dy in constants.DIRECTIONS:
             line = self._get_line(board, x, y, dx, dy)
-            patterns = constants.get_patterns(player)
+            patterns = constants.PATTERNS[player]
             if patterns["threat"]["open_three"] in line:
                 threat_count += 1
         board.undo_stone(x, y, player)

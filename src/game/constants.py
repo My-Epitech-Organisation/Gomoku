@@ -60,6 +60,18 @@ MOVE_BLOCK_OPEN_FOUR = 25_000_000
 MOVE_OPEN_THREE = 10_000_000
 MOVE_BLOCK_OPEN_THREE = 5_000_000
 
+PATTERNS = {
+    1: None,
+    2: None
+}
+
+def _init_patterns():
+    if PATTERNS[1] is None:
+        PATTERNS[1] = get_patterns(1)
+        PATTERNS[2] = get_patterns(2)
+
+_init_patterns()
+
 def get_patterns(player: int) -> dict:
     player_str = str(player)
     return {
