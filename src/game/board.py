@@ -26,7 +26,10 @@ class Board:
     @classmethod
     def _init_zobrist(cls, width: int, height: int):
         random.seed(42)
-        cls.zobrist_table = [[[random.getrandbits(64) for _ in range(2)] for _ in range(width)] for _ in range(height)]
+        cls.zobrist_table = [
+            [[random.getrandbits(64) for _ in range(2)] for _ in range(width)]
+            for _ in range(height)
+        ]
 
     def place_stone(self, x: int, y: int, player: int) -> bool:
         if 0 <= x < self.width and 0 <= y < self.height and self.grid[y][x] == 0:

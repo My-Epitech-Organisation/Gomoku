@@ -133,13 +133,13 @@ class MinMaxAI:
         hash_key = board.current_hash
         if hash_key in self.transposition_table:
             entry = self.transposition_table[hash_key]
-            if entry['age'] == self.age and entry['depth'] >= depth:
-                if entry['flag'] == constants.EXACT:
-                    return entry['value']
-                elif entry['flag'] == constants.LOWER and entry['value'] >= beta:
-                    return entry['value']
-                elif entry['flag'] == constants.UPPER and entry['value'] <= alpha:
-                    return entry['value']
+            if entry["age"] == self.age and entry["depth"] >= depth:
+                if entry["flag"] == constants.EXACT:
+                    return entry["value"]
+                elif entry["flag"] == constants.LOWER and entry["value"] >= beta:
+                    return entry["value"]
+                elif entry["flag"] == constants.UPPER and entry["value"] <= alpha:
+                    return entry["value"]
 
         if depth == 0 or board.is_full():
             return self.evaluate(board) * (1 if current_player == 1 else -1)
@@ -165,10 +165,10 @@ class MinMaxAI:
         else:
             flag = constants.EXACT
         self.transposition_table[hash_key] = {
-            'value': max_eval,
-            'depth': depth,
-            'flag': flag,
-            'age': self.age
+            "value": max_eval,
+            "depth": depth,
+            "flag": flag,
+            "age": self.age,
         }
 
         return max_eval
@@ -258,9 +258,9 @@ class MinMaxAI:
         best_value = -constants.INFINITY
 
         moves = board_copy.get_valid_moves()
-        moves = sorted(moves, key=lambda m: -self._move_heuristic(board_copy, m, player))[
-            :12
-        ]
+        moves = sorted(
+            moves, key=lambda m: -self._move_heuristic(board_copy, m, player)
+        )[:12]
 
         for move in moves:
             board_copy.place_stone(move[0], move[1], player)

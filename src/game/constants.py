@@ -60,10 +60,8 @@ MOVE_BLOCK_OPEN_FOUR = 25_000_000
 MOVE_OPEN_THREE = 10_000_000
 MOVE_BLOCK_OPEN_THREE = 5_000_000
 
-PATTERNS = {
-    1: None,
-    2: None
-}
+PATTERNS = {1: None, 2: None}
+
 
 def _init_patterns():
     if PATTERNS[1] is None:
@@ -112,5 +110,6 @@ def _init_patterns():
                     ],
                 },
             }
+
 
 _init_patterns()
