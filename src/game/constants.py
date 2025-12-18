@@ -67,53 +67,50 @@ PATTERNS = {
 
 def _init_patterns():
     if PATTERNS[1] is None:
-        PATTERNS[1] = get_patterns(1)
-        PATTERNS[2] = get_patterns(2)
+        for player in [1, 2]:
+            player_str = str(player)
+            PATTERNS[player] = {
+                "winning": {
+                    "five": player_str * 5,
+                    "open_four": f".{player_str * 4}.",
+                    "closed_four": [
+                        f"{player_str * 4}.",
+                        f".{player_str * 4}",
+                        f"{player_str * 3}.{player_str}",
+                        f"{player_str * 2}.{player_str * 2}",
+                    ],
+                    "split_four": [
+                        f"{player_str * 2}.{player_str * 2}",
+                        f"{player_str}.{player_str * 3}",
+                        f"{player_str * 3}.{player_str}",
+                    ],
+                },
+                "threat": {
+                    "open_three": f".{player_str * 3}.",
+                    "closed_three": [
+                        f"{player_str * 3}.",
+                        f".{player_str * 3}",
+                        f"{player_str * 2}.{player_str}",
+                        f"{player_str}.{player_str * 2}",
+                    ],
+                    "split_three": [
+                        f"{player_str}.{player_str}.{player_str}",
+                        f"{player_str * 2}..{player_str}",
+                        f"{player_str}..{player_str * 2}",
+                    ],
+                    "broken_open_three": [
+                        f".{player_str * 2}.{player_str}.",
+                        f".{player_str}.{player_str * 2}.",
+                    ],
+                },
+                "development": {
+                    "open_two": f".{player_str * 2}.",
+                    "closed_two": [
+                        f"{player_str * 2}.",
+                        f".{player_str * 2}",
+                        f"{player_str}.{player_str}",
+                    ],
+                },
+            }
 
 _init_patterns()
-
-def get_patterns(player: int) -> dict:
-    player_str = str(player)
-    return {
-        "winning": {
-            "five": player_str * 5,
-            "open_four": f".{player_str * 4}.",
-            "closed_four": [
-                f"{player_str * 4}.",
-                f".{player_str * 4}",
-                f"{player_str * 3}.{player_str}",
-                f"{player_str * 2}.{player_str * 2}",
-            ],
-            "split_four": [
-                f"{player_str * 2}.{player_str * 2}",
-                f"{player_str}.{player_str * 3}",
-                f"{player_str * 3}.{player_str}",
-            ],
-        },
-        "threat": {
-            "open_three": f".{player_str * 3}.",
-            "closed_three": [
-                f"{player_str * 3}.",
-                f".{player_str * 3}",
-                f"{player_str * 2}.{player_str}",
-                f"{player_str}.{player_str * 2}",
-            ],
-            "split_three": [
-                f"{player_str}.{player_str}.{player_str}",
-                f"{player_str * 2}..{player_str}",
-                f"{player_str}..{player_str * 2}",
-            ],
-            "broken_open_three": [
-                f".{player_str * 2}.{player_str}.",
-                f".{player_str}.{player_str * 2}.",
-            ],
-        },
-        "development": {
-            "open_two": f".{player_str * 2}.",
-            "closed_two": [
-                f"{player_str * 2}.",
-                f".{player_str * 2}",
-                f"{player_str}.{player_str}",
-            ],
-        },
-    }
