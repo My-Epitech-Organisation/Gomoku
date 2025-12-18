@@ -34,7 +34,6 @@ class MinMaxAI:
         self.age += 1
         best_move = [None]
 
-        # Check for immediate threats before search
         immediate_move = self._get_immediate_move(board, player)
         if immediate_move is not None:
             return immediate_move
@@ -290,7 +289,6 @@ class MinMaxAI:
             board.undo_stone(x, y, opponent)
             return constants.MOVE_BLOCK_WIN
 
-        # Check if this move blocks opponent's open 4
         opp_score = self._evaluate_position(board, x, y, opponent)
         board.undo_stone(x, y, opponent)
         if opp_score >= constants.SCORE_OPEN_FOUR:
