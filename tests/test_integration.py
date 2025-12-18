@@ -52,9 +52,9 @@ class MockGameContext:
 
     def get_about_info(self) -> dict:
         return {
-            "name": "pbrain-gomoku-ai",
-            "version": "1.0",
-            "author": "AI",
+            "name": "Gomokucaracha",
+            "version": "6.7",
+            "author": "Santiago Eliott Paul-Antoine",
             "country": "FR",
         }
 
@@ -95,7 +95,7 @@ class TestIntegration:
             "10,10",        # BEGIN
             "0,0",          # TURN 11,10 -> first empty position
             "1,0",          # TURN 12,10 -> next empty position
-            'name="pbrain-gomoku-ai", version="1.0", author="AI", country="FR"'  # ABOUT
+            'name="Gomokucaracha", version="6.7", author="Santiago Eliott Paul-Antoine", country="FR"'  # ABOUT
         ]
 
         assert output == expected_responses
