@@ -88,12 +88,12 @@ class CommunicationManager:
 
     def _handle_begin(self, command: Command) -> Response:
         try:
-            if hasattr(self.context, constants.METHOD_GET_OPENING_MOVE):
-                x, y = self.context.get_opening_move()
+            if hasattr(self.context, constants.METHOD_GET_FIRST_MOVE):
+                x, y = self.context.get_first_move()
                 return MoveResponse(x, y)
-            return ErrorResponse(constants.CONTEXT_NO_OPENING)
+            return ErrorResponse(constants.CONTEXT_NO_FIRST_MOVE)
         except Exception as e:
-            return ErrorResponse(f"{constants.OPENING_MOVE_FAILED}: {str(e)}")
+            return ErrorResponse(f"{constants.FIRST_MOVE_FAILED}: {str(e)}")
 
     def _handle_turn(self, command: Command) -> Response:
         try:

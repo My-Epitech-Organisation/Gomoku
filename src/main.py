@@ -31,14 +31,15 @@ class GameContext:
             use_iterative_deepening=True,
         )
 
-    def get_opening_move(self) -> tuple[int, int]:
+    def get_first_move(self) -> tuple[int, int]:
         if self.board is None or self.ai is None:
             return (0, 0)
 
-        opening_move = self.ai.get_opening_move(self.board)
-        if opening_move is not None:
-            self.board.place_stone(opening_move[0], opening_move[1], self.player_stone)
-            return opening_move
+        first_move = self.ai.get_first_move(self.board, self.player_stone)
+        if first_move is not None:
+            self.board.place_stone(first_move[0], first_move[1], self.player_stone)
+            print(f"[AI] First move chosen: {first_move}", file=sys.stderr)
+            return first_move
 
         x = self.board.width // 2
         y = self.board.height // 2

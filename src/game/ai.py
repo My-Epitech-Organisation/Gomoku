@@ -11,7 +11,7 @@ import time
 from typing import Optional, Tuple
 
 from . import constants
-from .opening import OpeningBook
+from .opening import get_opening_move, get_first_move
 
 class MinMaxAI:
     def __init__(
@@ -27,16 +27,12 @@ class MinMaxAI:
         self.nodes = 0
         self.transposition_table = {}
         self.age = 0
-        self.opening_book = OpeningBook()
 
-    def get_opening_move(self, board) -> Optional[Tuple[int, int]]:
-        move = self.opening_book.get_best_move(board)
-        if move is not None:
-            print(
-                f"[AI] Using opening book move: {move[0]},{move[1]}",
-                file=sys.stderr,
-            )
-        return move
+    def get_opening_move(self, board, player: int) -> Optional[Tuple[int, int]]:
+        return get_opening_move(board, player)
+
+    def get_first_move(self, board, player: int) -> Optional[Tuple[int, int]]:
+        return get_first_move(board, player)
 
     def get_best_move(self, board, player: int) -> Optional[Tuple[int, int]]:
         self.stop_search = False
@@ -44,10 +40,10 @@ class MinMaxAI:
         self.age += 1
         best_move = [None]
 
-        opening_move = self.opening_book.get_best_move(board)
+        opening_move = get_opening_move(board, player)
         if opening_move is not None:
             print(
-                f"[AI] Using opening book move: {opening_move[0]},{opening_move[1]}",
+                f"[AI] Using opening move: {opening_move[0]},{opening_move[1]}",
                 file=sys.stderr,
             )
             return opening_move
