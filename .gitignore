@@ -10,6 +10,9 @@ pbrain-gomoku-ai
 binary_gomokucaracha
 
 ruff_report.txt
+gomoku-evann-ai
+evann-gomoku-ai
+marin
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

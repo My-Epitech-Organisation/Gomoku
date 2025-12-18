@@ -89,17 +89,17 @@ class TestResponses:
     def test_about_response_default_values(self):
         response = AboutResponse()
         output = response.to_output()
-        assert 'name="pbrain-gomoku-ai"' in output
-        assert 'version="1.0"' in output
-        assert 'author="AI"' in output
+        assert 'name="Gomokucaracha"' in output
+        assert 'version="6.7"' in output
+        assert 'author="Santiago Eliott Paul-Antoine"' in output
         assert 'country="FR"' in output
 
     def test_about_response_partial_defaults(self):
         response = AboutResponse(name="CustomBrain")
         output = response.to_output()
         assert 'name="CustomBrain"' in output
-        assert 'version="1.0"' in output  # default
-        assert 'author="AI"' in output    # default
+        assert 'version="6.7"' in output  # default
+        assert 'author="Santiago Eliott Paul-Antoine"' in output    # default
         assert 'country="FR"' in output   # default
 
     def test_response_type_enum_values(self):
