@@ -13,28 +13,13 @@ from typing import Optional, Tuple
 from . import constants
 
 
-class Node:
-    def __init__(self):
-        self.children = {}
-        self.weight = 0
-
-
 class OpeningBook:
     def __init__(self):
-        self.root = Node()
+        self.sequences = []
         self._build_book()
 
     def _add_sequence(self, seq):
-        current = self.root
-        for move in seq:
-            x, y = move
-            x += 10
-            y += 10
-            move_key = (x, y)
-            if move_key not in current.children:
-                current.children[move_key] = Node()
-            current = current.children[move_key]
-            current.weight += 1
+        self.sequences.append(seq)
 
     def _build_book(self):
         sequences = [
@@ -52,31 +37,79 @@ class OpeningBook:
             [(-9,-9), (-7,-10), (-7,-9), (-8,-8), (-8,-10), (-6,-9)],
         ]
         symmetries = [
-            lambda x, y: (y, -x),      # rotate 90
-            lambda x, y: (-x, -y),     # rotate 180
-            lambda x, y: (-y, x),      # rotate 270
-            lambda x, y: (x, -y),      # mirror horizontal
-            lambda x, y: (-x, y),      # mirror vertical
-            lambda x, y: (y, x),       # mirror diagonal
-            lambda x, y: (-y, -x),     # mirror anti-diagonal
+            lambda dx, dy: (dy, -dx),      # rotate 90
+            lambda dx, dy: (-dx, -dy),     # rotate 180
+            lambda dx, dy: (-dy, dx),      # rotate 270
+            lambda dx, dy: (dx, -dy),      # mirror horizontal
+            lambda dx, dy: (-dx, dy),      # mirror vertical
+            lambda dx, dy: (dy, dx),       # mirror diagonal
+            lambda dx, dy: (-dy, -dx),     # mirror anti-diagonal
         ]
         for seq in sequences:
-            self._add_sequence(seq)
+            if not seq:
+                continue
+            relative_seq = [seq[0]]
+            for i in range(1, len(seq)):
+                dx = seq[i][0] - seq[i-1][0]
+                dy = seq[i][1] - seq[i-1][1]
+                relative_seq.append((dx, dy))
+            self._add_sequence(relative_seq)
             for sym in symmetries:
-                new_seq = [sym(x, y) for x, y in seq]
-                self._add_sequence(new_seq)
+                sym_seq = [sym(*delta) for delta in relative_seq]
+                self._add_sequence(sym_seq)
 
-    def get_best_move(self, board) -> Optional[Tuple[int, int]]:
-        current = self.root
-        for move in board.moves:
-            if move in current.children:
-                current = current.children[move]
-            else:
-                return None
-        if not current.children:
+    def _matches(self, seq, current_moves, tx, ty):
+        if len(current_moves) > len(seq):
+            return False
+        current_x = 10 + tx
+        current_y = 10 + ty
+        for i, delta in enumerate(seq):
+            expected_x = current_x + delta[0]
+            expected_y = current_y + delta[1]
+            if i < len(current_moves):
+                if current_moves[i] != (expected_x, expected_y):
+                    return False
+            current_x = expected_x
+            current_y = expected_y
+        return True
+
+    def get_best_move(self, board):
+        current_moves = board.moves
+        if not current_moves:
+            first_moves = {}
+            for seq in self.sequences:
+                if seq:
+                    delta = seq[0]
+                    x = 10 + delta[0]
+                    y = 10 + delta[1]
+                    if 0 <= x < 20 and 0 <= y < 20:
+                        key = (x, y)
+                        first_moves[key] = first_moves.get(key, 0) + 1
+            if first_moves:
+                return max(first_moves, key=first_moves.get)
             return None
-        best_move = max(current.children, key=lambda m: current.children[m].weight)
-        return best_move
+
+        next_moves = {}
+        for seq in self.sequences:
+            for tx in range(-10, 11):
+                for ty in range(-10, 11):
+                    if self._matches(seq, current_moves, tx, ty):
+                        next_index = len(current_moves)
+                        if next_index < len(seq):
+                            current_x = 10 + tx
+                            current_y = 10 + ty
+                            for i in range(next_index + 1):
+                                delta = seq[i]
+                                current_x += delta[0]
+                                current_y += delta[1]
+                            next_x = current_x
+                            next_y = current_y
+                            if 0 <= next_x < 20 and 0 <= next_y < 20:
+                                key = (next_x, next_y)
+                                next_moves[key] = next_moves.get(key, 0) + 1
+        if next_moves:
+            return max(next_moves, key=next_moves.get)
+        return None
 
 
 class MinMaxAI:
