@@ -54,6 +54,10 @@ class MinMaxAI:
 
         immediate_move = self._get_immediate_move(board, player)
         if immediate_move is not None:
+            print(
+                f"[AI] Immediate threat response: {immediate_move[0]},{immediate_move[1]}",
+                file=sys.stderr,
+            )
             return immediate_move
 
         def search_thread():
