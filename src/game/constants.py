@@ -57,7 +57,6 @@ THREAT_THREE_COMBO = 15_000
 DOUBLE_FOUR = INFINITY // 2
 
 def get_patterns(player: int) -> dict:
-    """Get the pattern dictionary for a given player, organized by category."""
     player_str = str(player)
     return {
         "winning": {
