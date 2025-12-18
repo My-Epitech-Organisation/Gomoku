@@ -34,6 +34,11 @@ class MinMaxAI:
         self.age += 1
         best_move = [None]
 
+        # Check for immediate threats before search
+        immediate_move = self._get_immediate_move(board, player)
+        if immediate_move is not None:
+            return immediate_move
+
         def search_thread():
             start_time = time.time()
             current_best = None
@@ -254,7 +259,7 @@ class MinMaxAI:
 
         moves = board.get_valid_moves()
         moves = sorted(moves, key=lambda m: -self._move_heuristic(board, m, player))[
-            :20
+            :12
         ]
 
         for move in moves:
@@ -270,6 +275,53 @@ class MinMaxAI:
         return best_move, best_value
 
     def _move_heuristic(self, board, move, player: int) -> int:
+        x, y = move
+        opponent = 3 - player
+
         board_copy = board.copy()
-        board_copy.place_stone(move[0], move[1], player)
+        board_copy.place_stone(x, y, player)
+        if board_copy.check_win(x, y, player):
+            return constants.MOVE_WIN
+
+        board_opp = board.copy()
+        board_opp.place_stone(x, y, opponent)
+        if board_opp.check_win(x, y, opponent):
+            return constants.MOVE_BLOCK_WIN
+
+        score = self._evaluate_position(board_copy, x, y, player)
+        if score >= constants.SCORE_OPEN_FOUR:
+            return constants.MOVE_OPEN_FOUR
+
+        if score >= constants.SCORE_OPEN_THREE:
+            return constants.MOVE_OPEN_THREE
+
+        threat_count = 0
+        for dx, dy in constants.DIRECTIONS:
+            line = self._get_line(board_copy, x, y, dx, dy)
+            patterns = constants.get_patterns(player)
+            if patterns["threat"]["open_three"] in line:
+                threat_count += 1
+        if threat_count >= 2:
+            return constants.MOVE_FORK
+
         return self.evaluate(board_copy)
+
+    def _get_immediate_move(self, board, player: int) -> Optional[Tuple[int, int]]:
+        opponent = 3 - player
+        moves = board.get_valid_moves()
+
+        for move in moves:
+            x, y = move
+            board_copy = board.copy()
+            board_copy.place_stone(x, y, player)
+            if board_copy.check_win(x, y, player):
+                return move
+
+        for move in moves:
+            x, y = move
+            board_opp = board.copy()
+            board_opp.place_stone(x, y, opponent)
+            if board_opp.check_win(x, y, opponent):
+                return move
+
+        return None
