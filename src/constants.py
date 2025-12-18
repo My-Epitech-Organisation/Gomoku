@@ -7,7 +7,7 @@
 
 BRAIN_NAME = "Gomokucaracha"
 BRAIN_VERSION = "6.7"
-BRAIN_AUTHOR = "Les Muchachos"
+BRAIN_AUTHOR = "Santiago Eliott Paul-Antoine"
 BRAIN_COUNTRY = "FR"
 
 ABOUT_FIELD_NAME = "name"
