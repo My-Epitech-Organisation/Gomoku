@@ -22,6 +22,7 @@ class Board:
         self.grid = [[0 for _ in range(width)] for _ in range(height)]
         self.move_count = 0
         self.current_hash = 0
+        self.moves = []
 
     @classmethod
     def _init_zobrist(cls, width: int, height: int):
@@ -35,6 +36,7 @@ class Board:
         if 0 <= x < self.width and 0 <= y < self.height and self.grid[y][x] == 0:
             self.grid[y][x] = player
             self.move_count += 1
+            self.moves.append((x, y))
             self.current_hash ^= self.zobrist_table[y][x][player - 1]
             return True
         return False
@@ -43,6 +45,7 @@ class Board:
         if 0 <= x < self.width and 0 <= y < self.height and self.grid[y][x] == player:
             self.grid[y][x] = 0
             self.move_count -= 1
+            self.moves.pop()
             self.current_hash ^= self.zobrist_table[y][x][player - 1]
 
     def get_valid_moves(self) -> List[Tuple[int, int]]:
@@ -107,5 +110,6 @@ class Board:
         new_board = Board(self.width, self.height)
         new_board.grid = [row[:] for row in self.grid]
         new_board.move_count = self.move_count
+        new_board.moves = self.moves[:]
         new_board.current_hash = self.current_hash
         return new_board

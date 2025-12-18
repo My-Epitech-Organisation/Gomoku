@@ -32,16 +32,13 @@ class GameContext:
         )
 
     def get_opening_move(self) -> tuple[int, int]:
-        if self.board is None:
+        if self.board is None or self.ai is None:
             return (0, 0)
 
-        if self.board.move_count > 0:
-            moves = self.board.get_valid_moves()
-            if moves:
-                x, y = moves[0]
-                self.board.place_stone(x, y, self.player_stone)
-                return (x, y)
-            return (0, 0)
+        opening_move = self.ai.get_opening_move(self.board)
+        if opening_move is not None:
+            self.board.place_stone(opening_move[0], opening_move[1], self.player_stone)
+            return opening_move
 
         x = self.board.width // 2
         y = self.board.height // 2

@@ -13,6 +13,72 @@ from typing import Optional, Tuple
 from . import constants
 
 
+class Node:
+    def __init__(self):
+        self.children = {}
+        self.weight = 0
+
+
+class OpeningBook:
+    def __init__(self):
+        self.root = Node()
+        self._build_book()
+
+    def _add_sequence(self, seq):
+        current = self.root
+        for move in seq:
+            x, y = move
+            x += 10
+            y += 10
+            move_key = (x, y)
+            if move_key not in current.children:
+                current.children[move_key] = Node()
+            current = current.children[move_key]
+            current.weight += 1
+
+    def _build_book(self):
+        sequences = [
+            [(-2,9), (-2,8), (0,9), (0,8), (-1,5), (-1,4)],
+            [(-9,7), (-7,8), (-8,6), (-6,4), (-8,5)],
+            [(0,-3), (0,-4), (0,-7), (1,-4), (-1,-4), (-2,-5), (0,-5), (1,-6), (1,-5)],
+            [(7,-10), (9,-8), (6,-10), (9,-7), (5,-10), (9,-6), (9,-5), (4,-10), (7,-8), (5,-6), (7,-6), (5,-5)],
+            [(9,-8), (9,-7), (8,-8), (8,-7), (7,-8), (7,-7), (9,-2), (9,-3), (8,-2), (8,-3), (7,-2), (7,-3)],
+            [(-8,-8), (-7,-8), (-6,-7), (-6,-6), (-6,-8), (-5,-8)],
+            [(-8,-8), (-7,-8), (-5,-7), (-5,-8), (-5,-9), (-4,-5)],
+            [(-8,-8), (-7,-8), (-5,-8), (-7,-9), (-7,-10), (-7,-6)],
+            [(-9,-9), (-8,-8), (-6,-8), (-7,-7), (-8,-7), (-7,-5)],
+            [(-9,-9), (-8,-9), (-6,-8), (-6,-6), (-7,-7), (-5,-7)],
+            [(-9,-9), (-8,-10), (-7,-9), (-7,-8), (-6,-8), (-6,-6)],
+            [(-9,-9), (-7,-10), (-7,-9), (-8,-8), (-8,-10), (-6,-9)],
+        ]
+        symmetries = [
+            lambda x, y: (y, -x),      # rotate 90
+            lambda x, y: (-x, -y),     # rotate 180
+            lambda x, y: (-y, x),      # rotate 270
+            lambda x, y: (x, -y),      # mirror horizontal
+            lambda x, y: (-x, y),      # mirror vertical
+            lambda x, y: (y, x),       # mirror diagonal
+            lambda x, y: (-y, -x),     # mirror anti-diagonal
+        ]
+        for seq in sequences:
+            self._add_sequence(seq)
+            for sym in symmetries:
+                new_seq = [sym(x, y) for x, y in seq]
+                self._add_sequence(new_seq)
+
+    def get_best_move(self, board) -> Optional[Tuple[int, int]]:
+        current = self.root
+        for move in board.moves:
+            if move in current.children:
+                current = current.children[move]
+            else:
+                return None
+        if not current.children:
+            return None
+        best_move = max(current.children, key=lambda m: current.children[m].weight)
+        return best_move
+
+
 class MinMaxAI:
     def __init__(
         self,
@@ -27,12 +93,30 @@ class MinMaxAI:
         self.nodes = 0
         self.transposition_table = {}
         self.age = 0
+        self.opening_book = OpeningBook()
+
+    def get_opening_move(self, board) -> Optional[Tuple[int, int]]:
+        move = self.opening_book.get_best_move(board)
+        if move is not None:
+            print(
+                f"[AI] Using opening book move: {move[0]},{move[1]}",
+                file=sys.stderr,
+            )
+        return move
 
     def get_best_move(self, board, player: int) -> Optional[Tuple[int, int]]:
         self.stop_search = False
         self.nodes = 0
         self.age += 1
         best_move = [None]
+
+        opening_move = self.opening_book.get_best_move(board)
+        if opening_move is not None:
+            print(
+                f"[AI] Using opening book move: {opening_move[0]},{opening_move[1]}",
+                file=sys.stderr,
+            )
+            return opening_move
 
         immediate_move = self._get_immediate_move(board, player)
         if immediate_move is not None:
