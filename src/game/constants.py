@@ -54,42 +54,48 @@ THREAT_THREE_COMBO = 15_000
 DOUBLE_FOUR = INFINITY // 2
 
 def get_patterns(player: int) -> dict:
-    """Get the pattern dictionary for a given player."""
+    """Get the pattern dictionary for a given player, organized by category."""
     player_str = str(player)
     return {
-        "five": player_str * 5,
-        "open_four": f".{player_str * 4}.",
-        "closed_four": [
-            f"{player_str * 4}.",
-            f".{player_str * 4}",
-            f"{player_str * 3}.{player_str}",
-            f"{player_str * 2}.{player_str * 2}",
-        ],
-        "open_three": f".{player_str * 3}.",
-        "closed_three": [
-            f"{player_str * 3}.",
-            f".{player_str * 3}",
-            f"{player_str * 2}.{player_str}",
-            f"{player_str}.{player_str * 2}",
-        ],
-        "open_two": f".{player_str * 2}.",
-        "closed_two": [
-            f"{player_str * 2}.",
-            f".{player_str * 2}",
-            f"{player_str}.{player_str}",
-        ],
-        "split_four": [
-            f"{player_str * 2}.{player_str * 2}",
-            f"{player_str}.{player_str * 3}",
-            f"{player_str * 3}.{player_str}",
-        ],
-        "split_three": [
-            f"{player_str}.{player_str}.{player_str}",
-            f"{player_str * 2}..{player_str}",
-            f"{player_str}..{player_str * 2}",
-        ],
-        "broken_open_three": [
-            f".{player_str * 2}.{player_str}.",
-            f".{player_str}.{player_str * 2}.",
-        ],
+        "winning": {
+            "five": player_str * 5,
+            "open_four": f".{player_str * 4}.",
+            "closed_four": [
+                f"{player_str * 4}.",
+                f".{player_str * 4}",
+                f"{player_str * 3}.{player_str}",
+                f"{player_str * 2}.{player_str * 2}",
+            ],
+            "split_four": [
+                f"{player_str * 2}.{player_str * 2}",
+                f"{player_str}.{player_str * 3}",
+                f"{player_str * 3}.{player_str}",
+            ],
+        },
+        "threat": {
+            "open_three": f".{player_str * 3}.",
+            "closed_three": [
+                f"{player_str * 3}.",
+                f".{player_str * 3}",
+                f"{player_str * 2}.{player_str}",
+                f"{player_str}.{player_str * 2}",
+            ],
+            "split_three": [
+                f"{player_str}.{player_str}.{player_str}",
+                f"{player_str * 2}..{player_str}",
+                f"{player_str}..{player_str * 2}",
+            ],
+            "broken_open_three": [
+                f".{player_str * 2}.{player_str}.",
+                f".{player_str}.{player_str * 2}.",
+            ],
+        },
+        "development": {
+            "open_two": f".{player_str * 2}.",
+            "closed_two": [
+                f"{player_str * 2}.",
+                f".{player_str * 2}",
+                f"{player_str}.{player_str}",
+            ],
+        },
     }

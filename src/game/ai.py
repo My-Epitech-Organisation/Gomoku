@@ -186,37 +186,40 @@ class MinMaxAI:
         patterns = constants.get_patterns(player)
 
         score = 0
-        if patterns["five"] in line:
+
+        if patterns["winning"]["five"] in line:
             score += constants.SCORE_FIVE
-        if patterns["open_four"] in line:
+        if patterns["winning"]["open_four"] in line:
             score += constants.SCORE_OPEN_FOUR
-        for pat in patterns["closed_four"]:
+        for pat in patterns["winning"]["closed_four"]:
             if pat in line:
                 score += constants.SCORE_CLOSED_FOUR
                 break
-        if patterns["open_three"] in line:
-            score += constants.SCORE_OPEN_THREE
-        for pat in patterns["closed_three"]:
-            if pat in line:
-                score += constants.SCORE_CLOSED_THREE
-                break
-        if patterns["open_two"] in line:
-            score += constants.SCORE_OPEN_TWO
-        for pat in patterns["closed_two"]:
-            if pat in line:
-                score += constants.SCORE_CLOSED_TWO
-                break
-        for pat in patterns["split_four"]:
+        for pat in patterns["winning"]["split_four"]:
             if pat in line:
                 score += constants.SCORE_SPLIT_FOUR
                 break
-        for pat in patterns["split_three"]:
+
+        if patterns["threat"]["open_three"] in line:
+            score += constants.SCORE_OPEN_THREE
+        for pat in patterns["threat"]["closed_three"]:
+            if pat in line:
+                score += constants.SCORE_CLOSED_THREE
+                break
+        for pat in patterns["threat"]["split_three"]:
             if pat in line:
                 score += constants.SCORE_SPLIT_THREE
                 break
-        for pat in patterns["broken_open_three"]:
+        for pat in patterns["threat"]["broken_open_three"]:
             if pat in line:
                 score += constants.SCORE_BROKEN_THREE
+                break
+
+        if patterns["development"]["open_two"] in line:
+            score += constants.SCORE_OPEN_TWO
+        for pat in patterns["development"]["closed_two"]:
+            if pat in line:
+                score += constants.SCORE_CLOSED_TWO
                 break
 
         return score
