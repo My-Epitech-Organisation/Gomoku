@@ -24,13 +24,14 @@ class MinMaxAI:
         self.time_limit = time_limit
         self.use_iterative_deepening = use_iterative_deepening
         self.stop_search = False
-        self.aggressive = True
         self.nodes = 0
+        self.transposition_table = {}
+        self.age = 0
 
     def get_best_move(self, board, player: int) -> Optional[Tuple[int, int]]:
-        self.aggressive = board.move_count % 2 == 0
         self.stop_search = False
         self.nodes = 0
+        self.age += 1
         best_move = [None]
 
         def search_thread():
@@ -53,7 +54,7 @@ class MinMaxAI:
             elapsed = time.time() - start_time
             print(
                 f"[AI] Stats: depth {current_depth-1}, nodes {self.nodes}, "
-                f"time {elapsed:.2f}s, aggressive {self.aggressive}",
+                f"time {elapsed:.2f}s",
                 file=sys.stderr,
             )
 
@@ -124,12 +125,25 @@ class MinMaxAI:
         if self.stop_search:
             return 0
         self.nodes += 1
+
+        hash_key = board.current_hash
+        if hash_key in self.transposition_table:
+            entry = self.transposition_table[hash_key]
+            if entry['age'] == self.age and entry['depth'] >= depth:
+                if entry['flag'] == constants.EXACT:
+                    return entry['value']
+                elif entry['flag'] == constants.LOWER and entry['value'] >= beta:
+                    return entry['value']
+                elif entry['flag'] == constants.UPPER and entry['value'] <= alpha:
+                    return entry['value']
+
         if depth == 0 or board.is_full():
             return self.evaluate(board) * (1 if current_player == 1 else -1)
 
         max_eval = -constants.INFINITY
         moves = board.get_valid_moves()
         opponent = 3 - current_player
+        original_alpha = alpha
 
         for move in moves:
             board_copy = board.copy()
@@ -139,6 +153,19 @@ class MinMaxAI:
             alpha = max(alpha, eval)
             if alpha >= beta:
                 break
+
+        if max_eval <= original_alpha:
+            flag = constants.UPPER
+        elif max_eval >= beta:
+            flag = constants.LOWER
+        else:
+            flag = constants.EXACT
+        self.transposition_table[hash_key] = {
+            'value': max_eval,
+            'depth': depth,
+            'flag': flag,
+            'age': self.age
+        }
 
         return max_eval
 
@@ -151,16 +178,10 @@ class MinMaxAI:
                     player_total += self._evaluate_position(board, x, y, 1)
                 elif board.grid[y][x] == 2:
                     opponent_total += self._evaluate_position(board, x, y, 2)
-        if self.aggressive:
-            return int(
-                constants.ATTACK_MULTIPLIER_AGGRESSIVE * player_total
-                - constants.DEFENSE_MULTIPLIER_AGGRESSIVE * opponent_total
-            )
-        else:
-            return int(
-                constants.ATTACK_MULTIPLIER_DEFENSIVE * player_total
-                - constants.DEFENSE_MULTIPLIER_DEFENSIVE * opponent_total
-            )
+        return int(
+            constants.ATTACK_MULTIPLIER * player_total
+            - constants.DEFENSE_MULTIPLIER * opponent_total
+        )
 
     def _evaluate_position(self, board, x: int, y: int, player: int) -> int:
         score = 0

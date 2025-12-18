@@ -5,22 +5,33 @@
 ## board
 ##
 
+import random
 from typing import List, Tuple
 
 from . import constants
 
 
 class Board:
+    zobrist_table = None
+
     def __init__(self, width: int, height: int):
+        if Board.zobrist_table is None:
+            Board._init_zobrist(width, height)
         self.width = width
         self.height = height
         self.grid = [[0 for _ in range(width)] for _ in range(height)]
         self.move_count = 0
+        self.current_hash = 0
+
+    def _init_zobrist(cls, width: int, height: int):
+        random.seed(42)
+        cls.zobrist_table = [[[random.getrandbits(64) for _ in range(2)] for _ in range(width)] for _ in range(height)]
 
     def place_stone(self, x: int, y: int, player: int) -> bool:
         if 0 <= x < self.width and 0 <= y < self.height and self.grid[y][x] == 0:
             self.grid[y][x] = player
             self.move_count += 1
+            self.current_hash ^= self.zobrist_table[y][x][player - 1]
             return True
         return False
 
@@ -86,4 +97,5 @@ class Board:
         new_board = Board(self.width, self.height)
         new_board.grid = [row[:] for row in self.grid]
         new_board.move_count = self.move_count
+        new_board.current_hash = self.current_hash
         return new_board
