@@ -206,7 +206,6 @@ class MinMaxAI:
         return "".join(line)
 
     def _evaluate_line(self, line: str, player: int) -> int:
-        player_str = str(player)
 
         patterns = constants.PATTERNS[player]
 
@@ -319,7 +318,6 @@ class MinMaxAI:
         return 0
 
     def _get_immediate_move(self, board, player: int) -> Optional[Tuple[int, int]]:
-        opponent = 3 - player
         moves = board.get_valid_moves()
         best_move = None
         best_score = -1
