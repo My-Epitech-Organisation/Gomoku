@@ -183,29 +183,7 @@ class MinMaxAI:
     def _evaluate_line(self, line: str, player: int) -> int:
         player_str = str(player)
 
-        patterns = {
-            "five": player_str * 5,
-            "open_four": f".{player_str * 4}.",
-            "closed_four": [
-                f"{player_str * 4}.",
-                f".{player_str * 4}",
-                f"{player_str * 3}.{player_str}",
-                f"{player_str * 2}.{player_str * 2}",
-            ],
-            "open_three": f".{player_str * 3}.",
-            "closed_three": [
-                f"{player_str * 3}.",
-                f".{player_str * 3}",
-                f"{player_str * 2}.{player_str}",
-                f"{player_str}.{player_str * 2}",
-            ],
-            "open_two": f".{player_str * 2}.",
-            "closed_two": [
-                f"{player_str * 2}.",
-                f".{player_str * 2}",
-                f"{player_str}.{player_str}",
-            ],
-        }
+        patterns = constants.get_patterns(player)
 
         score = 0
         if patterns["five"] in line:
@@ -227,6 +205,18 @@ class MinMaxAI:
         for pat in patterns["closed_two"]:
             if pat in line:
                 score += constants.SCORE_CLOSED_TWO
+                break
+        for pat in patterns["split_four"]:
+            if pat in line:
+                score += constants.SCORE_SPLIT_FOUR
+                break
+        for pat in patterns["split_three"]:
+            if pat in line:
+                score += constants.SCORE_SPLIT_THREE
+                break
+        for pat in patterns["broken_open_three"]:
+            if pat in line:
+                score += constants.SCORE_BROKEN_THREE
                 break
 
         return score
