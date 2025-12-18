@@ -1,7 +1,15 @@
 # Gomoku .gitignore
-pbrain-gomoku-ai
-ruff_report.txt
+
+#Binaries
 gomoku-evann-ai
+evann-gomoku-ai
+jules
+marin
+
+pbrain-gomoku-ai
+binary_gomokucaracha
+
+ruff_report.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
