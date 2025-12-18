@@ -23,6 +23,7 @@ class Board:
         self.move_count = 0
         self.current_hash = 0
 
+    @classmethod
     def _init_zobrist(cls, width: int, height: int):
         random.seed(42)
         cls.zobrist_table = [[[random.getrandbits(64) for _ in range(2)] for _ in range(width)] for _ in range(height)]
