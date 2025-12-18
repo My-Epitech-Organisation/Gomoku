@@ -8,7 +8,6 @@
 ##
 
 import sys
-sys.path.insert(0, 'src')
 from typing import Optional
 
 import constants
