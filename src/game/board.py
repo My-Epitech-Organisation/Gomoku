@@ -36,6 +36,12 @@ class Board:
             return True
         return False
 
+    def undo_stone(self, x: int, y: int, player: int) -> None:
+        if 0 <= x < self.width and 0 <= y < self.height and self.grid[y][x] == player:
+            self.grid[y][x] = 0
+            self.move_count -= 1
+            self.current_hash ^= self.zobrist_table[y][x][player - 1]
+
     def get_valid_moves(self) -> List[Tuple[int, int]]:
         if self.move_count == 0:
             center_x, center_y = self.width // 2, self.height // 2

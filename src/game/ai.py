@@ -84,11 +84,11 @@ class MinMaxAI:
         depth = self._get_depth(board.move_count)
 
         for move in moves:
-            board_copy = board.copy()
-            board_copy.place_stone(move[0], move[1], player)
+            board.place_stone(move[0], move[1], player)
             value = -self.negamax(
-                board_copy, depth - 1, -constants.INFINITY, constants.INFINITY, opponent
+                board, depth - 1, -constants.INFINITY, constants.INFINITY, opponent
             )
+            board.undo_stone(move[0], move[1], player)
             if value > best_value:
                 best_value = value
                 best_move = move
@@ -105,11 +105,11 @@ class MinMaxAI:
         moves = board.get_valid_moves()
 
         for move in moves:
-            board_copy = board.copy()
-            board_copy.place_stone(move[0], move[1], player)
+            board.place_stone(move[0], move[1], player)
             value = -self.negamax(
-                board_copy, depth - 1, -constants.INFINITY, constants.INFINITY, opponent
+                board, depth - 1, -constants.INFINITY, constants.INFINITY, opponent
             )
+            board.undo_stone(move[0], move[1], player)
             if value > best_value:
                 best_value = value
                 best_move = move
@@ -151,9 +151,9 @@ class MinMaxAI:
         original_alpha = alpha
 
         for move in moves:
-            board_copy = board.copy()
-            board_copy.place_stone(move[0], move[1], current_player)
-            eval = -self.negamax(board_copy, depth - 1, -beta, -alpha, opponent)
+            board.place_stone(move[0], move[1], current_player)
+            eval = -self.negamax(board, depth - 1, -beta, -alpha, opponent)
+            board.undo_stone(move[0], move[1], current_player)
             max_eval = max(max_eval, eval)
             alpha = max(alpha, eval)
             if alpha >= beta:
@@ -253,21 +253,22 @@ class MinMaxAI:
     def _search_at_depth(
         self, board, player: int, depth: int
     ) -> Tuple[Optional[Tuple[int, int]], int]:
+        board_copy = board.copy()
         opponent = 3 - player
         best_move = None
         best_value = -constants.INFINITY
 
-        moves = board.get_valid_moves()
-        moves = sorted(moves, key=lambda m: -self._move_heuristic(board, m, player))[
+        moves = board_copy.get_valid_moves()
+        moves = sorted(moves, key=lambda m: -self._move_heuristic(board_copy, m, player))[
             :12
         ]
 
         for move in moves:
-            board_copy = board.copy()
             board_copy.place_stone(move[0], move[1], player)
             value = -self.negamax(
                 board_copy, depth - 1, -constants.INFINITY, constants.INFINITY, opponent
             )
+            board_copy.undo_stone(move[0], move[1], player)
             if value > best_value:
                 best_value = value
                 best_move = move
@@ -278,50 +279,60 @@ class MinMaxAI:
         x, y = move
         opponent = 3 - player
 
-        board_copy = board.copy()
-        board_copy.place_stone(x, y, player)
-        if board_copy.check_win(x, y, player):
+        board.place_stone(x, y, player)
+        if board.check_win(x, y, player):
+            board.undo_stone(x, y, player)
             return constants.MOVE_WIN
 
-        board_opp = board.copy()
-        board_opp.place_stone(x, y, opponent)
-        if board_opp.check_win(x, y, opponent):
+        board.undo_stone(x, y, player)
+        board.place_stone(x, y, opponent)
+        if board.check_win(x, y, opponent):
+            board.undo_stone(x, y, opponent)
             return constants.MOVE_BLOCK_WIN
 
-        score = self._evaluate_position(board_copy, x, y, player)
+        # Check if this move blocks opponent's open 4
+        opp_score = self._evaluate_position(board, x, y, opponent)
+        board.undo_stone(x, y, opponent)
+        if opp_score >= constants.SCORE_OPEN_FOUR:
+            return constants.MOVE_BLOCK_OPEN_FOUR
+        elif opp_score >= constants.SCORE_OPEN_THREE:
+            return constants.MOVE_BLOCK_OPEN_THREE
+
+        board.place_stone(x, y, player)
+        score = self._evaluate_position(board, x, y, player)
         if score >= constants.SCORE_OPEN_FOUR:
+            board.undo_stone(x, y, player)
             return constants.MOVE_OPEN_FOUR
 
         if score >= constants.SCORE_OPEN_THREE:
+            board.undo_stone(x, y, player)
             return constants.MOVE_OPEN_THREE
 
         threat_count = 0
         for dx, dy in constants.DIRECTIONS:
-            line = self._get_line(board_copy, x, y, dx, dy)
+            line = self._get_line(board, x, y, dx, dy)
             patterns = constants.get_patterns(player)
             if patterns["threat"]["open_three"] in line:
                 threat_count += 1
+        board.undo_stone(x, y, player)
         if threat_count >= 2:
             return constants.MOVE_FORK
 
-        return self.evaluate(board_copy)
+        return 0
 
     def _get_immediate_move(self, board, player: int) -> Optional[Tuple[int, int]]:
         opponent = 3 - player
         moves = board.get_valid_moves()
+        best_move = None
+        best_score = -1
 
         for move in moves:
-            x, y = move
-            board_copy = board.copy()
-            board_copy.place_stone(x, y, player)
-            if board_copy.check_win(x, y, player):
-                return move
+            score = self._move_heuristic(board, move, player)
+            if score > best_score:
+                best_score = score
+                best_move = move
 
-        for move in moves:
-            x, y = move
-            board_opp = board.copy()
-            board_opp.place_stone(x, y, opponent)
-            if board_opp.check_win(x, y, opponent):
-                return move
+        if best_score >= constants.MOVE_BLOCK_OPEN_FOUR:
+            return best_move
 
         return None
