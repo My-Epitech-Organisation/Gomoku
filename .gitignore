@@ -1,5 +1,14 @@
 # Gomoku .gitignore
+
+#Binaries
+gomoku-evann-ai
+evann-gomoku-ai
+jules
+marin
+
 pbrain-gomoku-ai
+binary_gomokucaracha
+
 ruff_report.txt
 gomoku-evann-ai
 evann-gomoku-ai
