@@ -177,7 +177,6 @@ class MinMaxAI:
 
     def evaluate(self, board, last_move: Optional[Tuple[int, int]] = None, root_player: int = 1) -> int:
         if last_move is None:
-            # Root evaluation: evaluate around center
             center_x, center_y = board.width // 2, board.height // 2
             positions = set()
             for dx in range(-4, 5):
@@ -186,7 +185,6 @@ class MinMaxAI:
                     if 0 <= x < board.width and 0 <= y < board.height:
                         positions.add((x, y))
         else:
-            # Evaluate around last move
             x, y = last_move
             positions = set()
             for dx in range(-4, 5):
@@ -253,7 +251,7 @@ class MinMaxAI:
             if self._has_split_three(line, player):
                 threat_count += 1
         if threat_count >= 2:
-            score -= 100_000  # Huge penalty for double split-three
+            score -= 100_000
         return score
 
     def _get_line(self, board, x: int, y: int, dx: int, dy: int) -> str:
