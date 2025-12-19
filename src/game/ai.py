@@ -27,11 +27,13 @@ class MinMaxAI:
         self.nodes = 0
         self.transposition_table = {}
         self.age = 0
+        self.root_player = 1
 
     def get_best_move(self, board, player: int) -> Optional[Tuple[int, int]]:
         self.stop_search = False
         self.nodes = 0
         self.age += 1
+        self.root_player = player
         best_move = [None]
 
         immediate_move = self._get_immediate_move(board, player)
@@ -85,7 +87,7 @@ class MinMaxAI:
         for move in moves:
             board.place_stone(move[0], move[1], player)
             value = -self.negamax(
-                board, depth - 1, -constants.INFINITY, constants.INFINITY, opponent
+                board, depth - 1, -constants.INFINITY, constants.INFINITY, opponent, move, player
             )
             board.undo_stone(move[0], move[1], player)
             if value > best_value:
@@ -106,7 +108,7 @@ class MinMaxAI:
         for move in moves:
             board.place_stone(move[0], move[1], player)
             value = -self.negamax(
-                board, depth - 1, -constants.INFINITY, constants.INFINITY, opponent
+                board, depth - 1, -constants.INFINITY, constants.INFINITY, opponent, move, player
             )
             board.undo_stone(move[0], move[1], player)
             if value > best_value:
@@ -124,7 +126,7 @@ class MinMaxAI:
             return constants.DEPTH_LATE
 
     def negamax(
-        self, board, depth: int, alpha: int, beta: int, current_player: int
+        self, board, depth: int, alpha: int, beta: int, current_player: int, last_move: Optional[Tuple[int, int]] = None, root_player: int = 1
     ) -> int:
         if self.stop_search:
             return 0
@@ -142,7 +144,7 @@ class MinMaxAI:
                     return entry["value"]
 
         if depth == 0 or board.is_full():
-            return self.evaluate(board) * (1 if current_player == 1 else -1)
+            return self.evaluate(board, last_move, root_player)
 
         max_eval = -constants.INFINITY
         moves = board.get_valid_moves()
@@ -151,7 +153,7 @@ class MinMaxAI:
 
         for move in moves:
             board.place_stone(move[0], move[1], current_player)
-            eval = -self.negamax(board, depth - 1, -beta, -alpha, opponent)
+            eval = -self.negamax(board, depth - 1, -beta, -alpha, opponent, move, root_player)
             board.undo_stone(move[0], move[1], current_player)
             max_eval = max(max_eval, eval)
             alpha = max(alpha, eval)
@@ -173,25 +175,85 @@ class MinMaxAI:
 
         return max_eval
 
-    def evaluate(self, board) -> int:
+    def evaluate(self, board, last_move: Optional[Tuple[int, int]] = None, root_player: int = 1) -> int:
+        if last_move is None:
+            # Root evaluation: evaluate around center
+            center_x, center_y = board.width // 2, board.height // 2
+            positions = set()
+            for dx in range(-4, 5):
+                for dy in range(-4, 5):
+                    x, y = center_x + dx, center_y + dy
+                    if 0 <= x < board.width and 0 <= y < board.height:
+                        positions.add((x, y))
+        else:
+            # Evaluate around last move
+            x, y = last_move
+            positions = set()
+            for dx in range(-4, 5):
+                for dy in range(-4, 5):
+                    nx, ny = x + dx, y + dy
+                    if 0 <= nx < board.width and 0 <= ny < board.height:
+                        positions.add((nx, ny))
+
         player_total = 0
         opponent_total = 0
-        for y in range(board.height):
-            for x in range(board.width):
-                if board.grid[y][x] == 1:
-                    player_total += self._evaluate_position(board, x, y, 1)
-                elif board.grid[y][x] == 2:
-                    opponent_total += self._evaluate_position(board, x, y, 2)
-        return int(
-            constants.ATTACK_MULTIPLIER * player_total
-            - constants.DEFENSE_MULTIPLIER * opponent_total
-        )
+        for x, y in positions:
+            if board.grid[y][x] == 1:
+                player_total += self._evaluate_position(board, x, y, 1)
+            elif board.grid[y][x] == 2:
+                opponent_total += self._evaluate_position(board, x, y, 2)
+
+        opponent_player = 3 - root_player
+        danger_forced = False
+        for x, y in positions:
+            if board.grid[y][x] == 0:
+                board.place_stone(x, y, opponent_player)
+                threat_count = 0
+                for dx, dy in constants.DIRECTIONS:
+                    line = self._get_line(board, x, y, dx, dy)
+                    if self._has_open_three(line, opponent_player):
+                        threat_count += 1
+                board.undo_stone(x, y, opponent_player)
+                if threat_count >= 2:
+                    danger_forced = True
+                    break
+
+        opponent_split_two_count = 0
+        for x, y in positions:
+            if board.grid[y][x] == opponent_player:
+                count = 0
+                for dx, dy in constants.DIRECTIONS:
+                    line = self._get_line(board, x, y, dx, dy)
+                    if self._has_split_two(line, opponent_player):
+                        count += 1
+                if count >= 2:
+                    opponent_split_two_count += 1
+
+        if danger_forced or opponent_split_two_count > 0:
+            return -constants.INFINITY
+        else:
+            if root_player == 1:
+                score = int(
+                    constants.ATTACK_MULTIPLIER * player_total
+                    - constants.DEFENSE_MULTIPLIER * opponent_total
+                )
+            else:
+                score = int(
+                    constants.ATTACK_MULTIPLIER * opponent_total
+                    - constants.DEFENSE_MULTIPLIER * player_total
+                )
+            return score
 
     def _evaluate_position(self, board, x: int, y: int, player: int) -> int:
         score = 0
+        threat_count = 0
         for dx, dy in constants.DIRECTIONS:
             line = self._get_line(board, x, y, dx, dy)
             score += self._evaluate_line(line, player)
+            if self._has_split_three(line, player):
+                threat_count += 1
+        if threat_count >= 2:
+            score -= 100_000  # Huge penalty for double split-three
         return score
 
     def _get_line(self, board, x: int, y: int, dx: int, dy: int) -> str:
@@ -248,6 +310,44 @@ class MinMaxAI:
 
         return score
 
+    def _has_split_three(self, line: str, player: int) -> bool:
+        patterns = constants.PATTERNS[player]["threat"]["split_three"]
+        for pat in patterns:
+            if pat in line:
+                return True
+        return False
+
+    def _has_open_three(self, line: str, player: int) -> bool:
+        pattern = constants.PATTERNS[player]["threat"]["open_three"]
+        return pattern in line
+
+    def _has_split_two(self, line: str, player: int) -> bool:
+        p = str(player)
+        patterns = [f"{p}.{p}", f"{p}..{p}"]
+        return any(pat in line for pat in patterns)
+
+    def _creates_double_open_three(self, board, x, y, player):
+        threat_count = 0
+        for dx, dy in constants.DIRECTIONS:
+            line = self._get_line(board, x, y, dx, dy)
+            if self._has_open_three(line, player):
+                threat_count += 1
+        return threat_count >= 2
+
+    def _is_losing_move(self, board, move, player):
+        opponent = 3 - player
+        board.place_stone(move[0], move[1], player)
+        opp_moves = board.get_valid_moves()
+        for opp_move in opp_moves:
+            board.place_stone(opp_move[0], opp_move[1], opponent)
+            if self._creates_double_open_three(board, opp_move[0], opp_move[1], opponent):
+                board.undo_stone(opp_move[0], opp_move[1], opponent)
+                board.undo_stone(move[0], move[1], player)
+                return True
+            board.undo_stone(opp_move[0], opp_move[1], opponent)
+        board.undo_stone(move[0], move[1], player)
+        return False
+
     def _search_at_depth(
         self, board, player: int, depth: int
     ) -> Tuple[Optional[Tuple[int, int]], int]:
@@ -257,14 +357,22 @@ class MinMaxAI:
         best_value = -constants.INFINITY
 
         moves = board_copy.get_valid_moves()
+        if depth <= 2:
+            max_moves = 12
+        elif depth <= 4:
+            max_moves = 8
+        else:
+            max_moves = 6
         moves = sorted(
             moves, key=lambda m: -self._move_heuristic(board_copy, m, player)
-        )[:12]
+        )[:max_moves]
+
+        moves = [m for m in moves if not self._is_losing_move(board_copy, m, player)]
 
         for move in moves:
             board_copy.place_stone(move[0], move[1], player)
             value = -self.negamax(
-                board_copy, depth - 1, -constants.INFINITY, constants.INFINITY, opponent
+                board_copy, depth - 1, -constants.INFINITY, constants.INFINITY, opponent, move, self.root_player
             )
             board_copy.undo_stone(move[0], move[1], player)
             if value > best_value:
