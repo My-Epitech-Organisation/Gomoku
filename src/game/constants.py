@@ -28,7 +28,7 @@ MAX_DEPTH = 12
 
 # Time Banking - use remaining time to warm TT
 TIME_BANK_ENABLED = True
-RESPONSE_DEADLINE = 4.70  # Return move at this time (300ms safety margin)
+RESPONSE_DEADLINE = 4.50  # Return move at this time (500ms safety margin)
 MIN_THINKING_TIME = 0.1   # Always think at least this long
 TT_WARMUP_DEPTH = 4       # Depth for warming TT during time bank
 

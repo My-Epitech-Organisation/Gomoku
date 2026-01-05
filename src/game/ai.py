@@ -97,8 +97,8 @@ class MinMaxAI:
         thread = threading.Thread(target=warm_tt_thread, daemon=True)
         thread.start()
 
-        # Wait until deadline
-        time.sleep(max(0, remaining - 0.05))  # 50ms safety margin
+        # Wait until deadline (with safety margin for response latency)
+        time.sleep(max(0, remaining - 0.15))  # 150ms safety margin
         self.stop_search = True
         thread.join(timeout=0.05)
 
@@ -108,6 +108,32 @@ class MinMaxAI:
         )
 
         return decided_move
+
+    def _warm_tt_background(self, board, player: int) -> None:
+        """
+        Non-blocking TT warming (runs in background after ponder hit).
+        Continues until stop_search is set or work is done.
+        Called from a daemon thread, so it won't block the response.
+        """
+        self.stop_search = False
+        opponent = 3 - player
+
+        # Predict opponent responses and search them
+        predicted_responses = self._get_top_opponent_moves(board, opponent, count=5)
+
+        warmed = 0
+        for pred_move in predicted_responses:
+            if self.stop_search:
+                break
+            pred_board = board.copy()
+            pred_board.place_stone(pred_move[0], pred_move[1], opponent)
+            self._search_at_depth(pred_board, player, depth=constants.TT_WARMUP_DEPTH)
+            warmed += 1
+
+        print(
+            f"[AI] Background TT warm: {warmed}/{len(predicted_responses)} done",
+            file=sys.stderr,
+        )
 
     def _full_iterative_search(
         self,
@@ -138,7 +164,7 @@ class MinMaxAI:
 
         elapsed = time.time() - start_time
         remaining = constants.RESPONSE_DEADLINE - elapsed
-        time.sleep(max(0, remaining))
+        time.sleep(max(0, remaining - 0.15))  # 150ms margin for response latency
 
         self.stop_search = True
         thread.join(timeout=0.1)
