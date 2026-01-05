@@ -277,45 +277,70 @@ class MinMaxAI:
         x, y = move
         opponent = 3 - player
 
+        # === 1. Tester si le coup est gagnant ===
         board.place_stone(x, y, player)
         if board.check_win(x, y, player):
             board.undo_stone(x, y, player)
             return constants.MOVE_WIN
 
+        # === 2. Compter nos menaces ===
+        our_threats = self._count_threats(board, x, y, player)
         board.undo_stone(x, y, player)
+
+        total_fours = our_threats["open_fours"] + our_threats["closed_fours"]
+
+        # Double-four = victoire forcée
+        if total_fours >= 2:
+            return constants.MOVE_DOUBLE_FOUR
+
+        # Four-three = victoire forcée
+        if total_fours >= 1 and our_threats["open_threes"] >= 1:
+            return constants.MOVE_FOUR_THREE
+
+        # Quatre ouvert
+        if our_threats["open_fours"] >= 1:
+            return constants.MOVE_OPEN_FOUR
+
+        # Double-three = devient four-three au prochain coup
+        if our_threats["open_threes"] >= 2:
+            return constants.MOVE_FORK
+
+        # === 3. Tester menaces adverses à bloquer ===
         board.place_stone(x, y, opponent)
         if board.check_win(x, y, opponent):
             board.undo_stone(x, y, opponent)
             return constants.MOVE_BLOCK_WIN
 
-        opp_score = self._evaluate_position(board, x, y, opponent)
+        opp_threats = self._count_threats(board, x, y, opponent)
         board.undo_stone(x, y, opponent)
-        if opp_score >= constants.SCORE_OPEN_FOUR:
+
+        opp_fours = opp_threats["open_fours"] + opp_threats["closed_fours"]
+
+        # Bloquer double-four adverse
+        if opp_fours >= 2:
+            return constants.MOVE_BLOCK_DOUBLE_FOUR
+
+        # Bloquer four-three adverse
+        if opp_fours >= 1 and opp_threats["open_threes"] >= 1:
+            return constants.MOVE_BLOCK_FOUR_THREE
+
+        # Bloquer quatre ouvert
+        if opp_threats["open_fours"] >= 1:
             return constants.MOVE_BLOCK_OPEN_FOUR
-        elif opp_score >= constants.SCORE_OPEN_THREE:
+
+        # Bloquer trois ouvert
+        if opp_threats["open_threes"] >= 1:
             return constants.MOVE_BLOCK_OPEN_THREE
 
+        # === 4. Évaluer le potentiel du coup ===
         board.place_stone(x, y, player)
         score = self._evaluate_position(board, x, y, player)
-        if score >= constants.SCORE_OPEN_FOUR:
-            board.undo_stone(x, y, player)
-            return constants.MOVE_OPEN_FOUR
+        board.undo_stone(x, y, player)
 
         if score >= constants.SCORE_OPEN_THREE:
-            board.undo_stone(x, y, player)
             return constants.MOVE_OPEN_THREE
 
-        threat_count = 0
-        for dx, dy in constants.DIRECTIONS:
-            line = self._get_line(board, x, y, dx, dy)
-            patterns = constants.PATTERNS[player]
-            if patterns["threat"]["open_three"] in line:
-                threat_count += 1
-        board.undo_stone(x, y, player)
-        if threat_count >= 2:
-            return constants.MOVE_FORK
-
-        return 0
+        return score
 
     def _get_immediate_move(self, board, player: int) -> Optional[Tuple[int, int]]:
         moves = board.get_valid_moves()
@@ -332,3 +357,41 @@ class MinMaxAI:
             return best_move
 
         return None
+
+    def _count_threats(self, board, x: int, y: int, player: int) -> dict:
+        """Compte les menaces créées par une pierre en (x,y)"""
+        threats = {
+            "fives": 0,
+            "open_fours": 0,
+            "closed_fours": 0,
+            "open_threes": 0,
+        }
+        patterns = constants.PATTERNS[player]
+
+        for dx, dy in constants.DIRECTIONS:
+            line = self._get_line(board, x, y, dx, dy)
+
+            if patterns["winning"]["five"] in line:
+                threats["fives"] += 1
+                continue
+
+            if patterns["winning"]["open_four"] in line:
+                threats["open_fours"] += 1
+                continue
+
+            four_found = False
+            for pat in patterns["winning"]["closed_four"]:
+                if pat in line:
+                    threats["closed_fours"] += 1
+                    four_found = True
+                    break
+            if not four_found:
+                for pat in patterns["winning"]["split_four"]:
+                    if pat in line:
+                        threats["closed_fours"] += 1
+                        break
+
+            if patterns["threat"]["open_three"] in line:
+                threats["open_threes"] += 1
+
+        return threats
