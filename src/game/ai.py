@@ -8,7 +8,7 @@
 import sys
 import threading
 import time
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 
 from . import constants
 
@@ -37,6 +37,12 @@ class MinMaxAI:
         immediate_move = self._get_immediate_move(board, player)
         if immediate_move is not None:
             return immediate_move
+
+        # Threat Space Search - find forced wins (VCT)
+        vct_move = self._threat_space_search(board, player, max_depth=10, time_limit=1.0)
+        if vct_move is not None:
+            print(f"[AI] VCT found: {vct_move}", file=sys.stderr)
+            return vct_move
 
         def search_thread():
             start_time = time.time()
@@ -277,38 +283,52 @@ class MinMaxAI:
         x, y = move
         opponent = 3 - player
 
-        # === 1. Tester si le coup est gagnant ===
+        # === 1. Check if move wins ===
         board.place_stone(x, y, player)
         if board.check_win(x, y, player):
             board.undo_stone(x, y, player)
             return constants.MOVE_WIN
 
-        # === 2. Compter nos menaces ===
+        # === 2. Count our threats ===
         our_threats = self._count_threats(board, x, y, player)
-        board.undo_stone(x, y, player)
 
         total_fours = our_threats["open_fours"] + our_threats["closed_fours"]
 
-        # Double-four = victoire forcée
+        # Double-four = forced win
         if total_fours >= 2:
+            board.undo_stone(x, y, player)
             return constants.MOVE_DOUBLE_FOUR
 
-        # Four-three = victoire forcée
+        # Four-three = forced win
         if total_fours >= 1 and our_threats["open_threes"] >= 1:
+            board.undo_stone(x, y, player)
             return constants.MOVE_FOUR_THREE
 
-        # Quatre ouvert
+        # Open four
         if our_threats["open_fours"] >= 1:
+            board.undo_stone(x, y, player)
             return constants.MOVE_OPEN_FOUR
 
-        # Double-three = devient four-three au prochain coup
+        # Double-three = becomes four-three next move
         if our_threats["open_threes"] >= 2:
+            board.undo_stone(x, y, player)
             return constants.MOVE_FORK
 
-        # === 3. Tester menaces adverses à bloquer ===
+        board.undo_stone(x, y, player)
+
+        # === 3. Check opponent threats to block (PRIORITY) ===
         board.place_stone(x, y, opponent)
-        if board.check_win(x, y, opponent):
+        blocks_win = board.check_win(x, y, opponent)
+        if blocks_win:
             board.undo_stone(x, y, opponent)
+            # This move blocks opponent win - MANDATORY
+            # But check if we have a counter-attack
+            board.place_stone(x, y, player)
+            opp_still_wins = self._has_winning_move(board, opponent)
+            board.undo_stone(x, y, player)
+            if opp_still_wins:
+                # Even after blocking, opponent wins - lost position
+                return constants.MOVE_BLOCK_WIN // 2
             return constants.MOVE_BLOCK_WIN
 
         opp_threats = self._count_threats(board, x, y, opponent)
@@ -316,23 +336,23 @@ class MinMaxAI:
 
         opp_fours = opp_threats["open_fours"] + opp_threats["closed_fours"]
 
-        # Bloquer double-four adverse
+        # Block opponent double-four
         if opp_fours >= 2:
             return constants.MOVE_BLOCK_DOUBLE_FOUR
 
-        # Bloquer four-three adverse
+        # Block opponent four-three
         if opp_fours >= 1 and opp_threats["open_threes"] >= 1:
             return constants.MOVE_BLOCK_FOUR_THREE
 
-        # Bloquer quatre ouvert
+        # Block open four
         if opp_threats["open_fours"] >= 1:
             return constants.MOVE_BLOCK_OPEN_FOUR
 
-        # Bloquer trois ouvert
+        # Block open three
         if opp_threats["open_threes"] >= 1:
             return constants.MOVE_BLOCK_OPEN_THREE
 
-        # === 4. Évaluer le potentiel du coup ===
+        # === 4. Evaluate move potential ===
         board.place_stone(x, y, player)
         score = self._evaluate_position(board, x, y, player)
         board.undo_stone(x, y, player)
@@ -341,6 +361,43 @@ class MinMaxAI:
             return constants.MOVE_OPEN_THREE
 
         return score
+
+    def _has_winning_move(self, board, player: int) -> bool:
+        """Check if player has a winning move."""
+        valid_moves = board.get_valid_moves()
+        for mx, my in valid_moves:
+            board.place_stone(mx, my, player)
+            if board.check_win(mx, my, player):
+                board.undo_stone(mx, my, player)
+                return True
+            board.undo_stone(mx, my, player)
+        return False
+
+    def _count_critical_threats(self, board, player: int) -> dict:
+        """Count critical threats for a player across the entire board."""
+        critical = {"winning": 0, "four_three": 0, "double_four": 0}
+        valid_moves = board.get_valid_moves()
+
+        for mx, my in valid_moves:
+            board.place_stone(mx, my, player)
+
+            if board.check_win(mx, my, player):
+                critical["winning"] += 1
+            else:
+                threats = self._count_threats(board, mx, my, player)
+                total_fours = threats["open_fours"] + threats["closed_fours"]
+                if total_fours >= 2:
+                    critical["double_four"] += 1
+                elif total_fours >= 1 and threats["open_threes"] >= 1:
+                    critical["four_three"] += 1
+
+            board.undo_stone(mx, my, player)
+
+            # Early exit if already too many threats
+            if critical["winning"] >= 2 or critical["four_three"] >= 2:
+                break
+
+        return critical
 
     def _get_immediate_move(self, board, player: int) -> Optional[Tuple[int, int]]:
         moves = board.get_valid_moves()
@@ -359,7 +416,7 @@ class MinMaxAI:
         return None
 
     def _count_threats(self, board, x: int, y: int, player: int) -> dict:
-        """Compte les menaces créées par une pierre en (x,y)"""
+        """Count threats created by a stone at (x, y)."""
         threats = {
             "fives": 0,
             "open_fours": 0,
@@ -395,3 +452,159 @@ class MinMaxAI:
                 threats["open_threes"] += 1
 
         return threats
+
+    # ==================== THREAT SPACE SEARCH (TSS) ====================
+
+    def _get_threat_moves(self, board, player: int) -> List[Tuple[int, int]]:
+        """Return moves that create threats (fours, threes)."""
+        threat_moves = []
+        valid_moves = board.get_valid_moves()
+
+        for x, y in valid_moves:
+            board.place_stone(x, y, player)
+            threats = self._count_threats(board, x, y, player)
+            board.undo_stone(x, y, player)
+
+            if (threats["open_fours"] > 0 or
+                threats["closed_fours"] > 0 or
+                threats["open_threes"] > 0):
+                threat_moves.append((x, y))
+
+        return threat_moves
+
+    def _get_defense_moves(self, board, attacker: int) -> List[Tuple[int, int]]:
+        """Return moves that block attacker's threats."""
+        defender = 3 - attacker
+        defense_moves = set()
+        valid_moves = board.get_valid_moves()
+
+        for x, y in valid_moves:
+            # 1. Directly block a threat
+            board.place_stone(x, y, attacker)
+            threats = self._count_threats(board, x, y, attacker)
+            board.undo_stone(x, y, attacker)
+
+            if (threats["fives"] > 0 or
+                threats["open_fours"] > 0 or
+                threats["closed_fours"] > 0 or
+                threats["open_threes"] > 0):
+                defense_moves.add((x, y))
+
+            # 2. Create a counter-threat
+            board.place_stone(x, y, defender)
+            counter = self._count_threats(board, x, y, defender)
+            board.undo_stone(x, y, defender)
+
+            if counter["open_fours"] > 0 or counter["closed_fours"] > 0:
+                defense_moves.add((x, y))
+
+        return list(defense_moves)
+
+    def _vct_search(
+        self, board, current_player: int, attacker: int,
+        depth: int, max_depth: int
+    ) -> bool:
+        """
+        DFS search for Victory by Continuous Threats.
+
+        Returns:
+            True if VCT found for attacker.
+        """
+        # Immediate win?
+        if self._has_winning_move(board, attacker):
+            return True
+
+        # Depth limit
+        if depth >= max_depth:
+            return False
+
+        if current_player == attacker:
+            # Attacker's turn: find ONE threat move leading to VCT
+            threat_moves = self._get_threat_moves(board, attacker)
+            threat_moves.sort(
+                key=lambda m: -self._move_heuristic(board, m, attacker)
+            )
+
+            for move in threat_moves[:4]:
+                x, y = move
+                board.place_stone(x, y, attacker)
+
+                result = self._vct_search(
+                    board, 3 - attacker, attacker,
+                    depth + 1, max_depth
+                )
+
+                board.undo_stone(x, y, attacker)
+
+                if result:
+                    return True
+
+            return False
+
+        else:
+            # Defender's turn: must block ALL threats
+            defense_moves = self._get_defense_moves(board, attacker)
+
+            if not defense_moves:
+                return True
+
+            defense_moves.sort(
+                key=lambda m: -self._move_heuristic(board, m, current_player)
+            )
+
+            for move in defense_moves[:3]:
+                x, y = move
+                board.place_stone(x, y, current_player)
+
+                result = self._vct_search(
+                    board, attacker, attacker,
+                    depth + 1, max_depth
+                )
+
+                board.undo_stone(x, y, current_player)
+
+                if not result:
+                    return False
+
+            return True
+
+    def _threat_space_search(
+        self, board, player: int, max_depth: int = 10, time_limit: float = 1.0
+    ) -> Optional[Tuple[int, int]]:
+        """
+        Search for Victory by Continuous Threats (VCT).
+
+        Returns the move leading to a forced win, or None.
+        """
+        start_time = time.time()
+
+        if self._has_winning_move(board, player):
+            return None
+
+        threat_moves = self._get_threat_moves(board, player)
+        if not threat_moves:
+            return None
+
+        threat_moves.sort(
+            key=lambda m: -self._move_heuristic(board, m, player)
+        )
+        threat_moves = threat_moves[:8]
+
+        for move in threat_moves:
+            if time.time() - start_time > time_limit:
+                break
+
+            x, y = move
+            board.place_stone(x, y, player)
+
+            vct_found = self._vct_search(
+                board, 3 - player, player,
+                depth=1, max_depth=max_depth
+            )
+
+            board.undo_stone(x, y, player)
+
+            if vct_found:
+                return move
+
+        return None

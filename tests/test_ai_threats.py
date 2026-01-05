@@ -22,7 +22,7 @@ class TestCountThreats:
         self.ai = MinMaxAI()
 
     def test_count_threats_empty(self):
-        """Un coup isolé ne crée aucune menace"""
+        """An isolated move creates no threat"""
         self.board.place_stone(10, 10, 1)
         threats = self.ai._count_threats(self.board, 10, 10, 1)
         assert threats["fives"] == 0
@@ -31,7 +31,7 @@ class TestCountThreats:
         assert threats["open_threes"] == 0
 
     def test_count_threats_open_three(self):
-        """Détecte un trois ouvert horizontal"""
+        """Detects a horizontal open three"""
         # Place .XXX.
         self.board.place_stone(10, 10, 1)
         self.board.place_stone(11, 10, 1)
@@ -40,7 +40,7 @@ class TestCountThreats:
         assert threats["open_threes"] >= 1
 
     def test_count_threats_open_four(self):
-        """Détecte un quatre ouvert horizontal"""
+        """Detects a horizontal open four"""
         # Place .XXXX.
         self.board.place_stone(10, 10, 1)
         self.board.place_stone(11, 10, 1)
@@ -50,7 +50,7 @@ class TestCountThreats:
         assert threats["open_fours"] >= 1
 
     def test_count_threats_five(self):
-        """Détecte cinq en ligne"""
+        """Detects five in a row"""
         for i in range(5):
             self.board.place_stone(10 + i, 10, 1)
         threats = self.ai._count_threats(self.board, 12, 10, 1)
@@ -63,57 +63,58 @@ class TestMoveHeuristicThreats:
         self.ai = MinMaxAI()
 
     def test_winning_move(self):
-        """Un coup gagnant a la priorité maximale"""
-        # XXXX. -> jouer en (14,10) gagne
+        """A winning move has maximum priority"""
+        # XXXX. -> playing at (14,10) wins
         for i in range(4):
             self.board.place_stone(10 + i, 10, 1)
         score = self.ai._move_heuristic(self.board, (14, 10), 1)
         assert score == constants.MOVE_WIN
 
     def test_block_winning_move(self):
-        """Bloquer une victoire adverse"""
-        # Adversaire a OOOO.
+        """Block an opponent's winning move"""
+        # Opponent has XOOOO. (blocked on one side by X)
+        self.board.place_stone(9, 10, 1)  # Block one side
         for i in range(4):
             self.board.place_stone(10 + i, 10, 2)
         score = self.ai._move_heuristic(self.board, (14, 10), 1)
         assert score == constants.MOVE_BLOCK_WIN
 
     def test_double_three_detection(self):
-        """Détecte un double-three (fork)"""
-        # Configuration en L pour créer deux trois ouverts
+        """Detects a double-three (fork)"""
+        # L-shaped configuration to create two open threes
         #     X
         #     X
         #   X X X
-        self.board.place_stone(10, 10, 1)  # Centre
-        self.board.place_stone(9, 10, 1)   # Gauche
-        self.board.place_stone(10, 9, 1)   # Haut
-        # Jouer en (11,10) et (10,11) crée double-three
-        self.board.place_stone(11, 10, 1)  # Droite
-        self.board.place_stone(10, 11, 1)  # Bas
+        self.board.place_stone(10, 10, 1)  # Center
+        self.board.place_stone(9, 10, 1)   # Left
+        self.board.place_stone(10, 9, 1)   # Top
+        # Playing at (11,10) and (10,11) creates double-three
+        self.board.place_stone(11, 10, 1)  # Right
+        self.board.place_stone(10, 11, 1)  # Bottom
 
-        # Placer une pierre qui crée le fork
+        # Place a stone that creates the fork
         score = self.ai._move_heuristic(self.board, (10, 12), 1)
-        # Devrait détecter au moins un pattern de menace
+        # Should detect at least one threat pattern
         assert score >= constants.MOVE_OPEN_THREE
 
     def test_four_three_detection(self):
-        """Détecte un four-three"""
-        # Horizontal: XXX. (besoin d'un de plus pour four)
+        """Detects a four-three"""
+        # Horizontal: XXX. (needs one more for four)
         self.board.place_stone(10, 10, 1)
         self.board.place_stone(11, 10, 1)
         self.board.place_stone(12, 10, 1)
-        # Vertical: X au-dessus
+        # Vertical: X above
         self.board.place_stone(13, 9, 1)
         self.board.place_stone(13, 11, 1)
 
-        # Jouer en (13,10) crée four horizontal ET trois vertical
+        # Playing at (13,10) creates horizontal four AND vertical three
         score = self.ai._move_heuristic(self.board, (13, 10), 1)
-        # Devrait être au moins un four
+        # Should be at least a four
         assert score >= constants.MOVE_OPEN_FOUR or score >= constants.MOVE_FOUR_THREE
 
     def test_open_four_priority(self):
-        """Un quatre ouvert a haute priorité"""
-        # .XXX. -> jouer adjacent crée .XXXX.
+        """An open four has high priority"""
+        # .XXX. -> playing adjacent creates .XXXX.
         self.board.place_stone(10, 10, 1)
         self.board.place_stone(11, 10, 1)
         self.board.place_stone(12, 10, 1)
@@ -121,8 +122,8 @@ class TestMoveHeuristicThreats:
         assert score >= constants.MOVE_OPEN_FOUR
 
     def test_block_open_four(self):
-        """Bloquer un quatre ouvert adverse"""
-        # Adversaire a .OOO.
+        """Block an opponent's open four"""
+        # Opponent has .OOO.
         self.board.place_stone(10, 10, 2)
         self.board.place_stone(11, 10, 2)
         self.board.place_stone(12, 10, 2)
@@ -136,18 +137,18 @@ class TestDoubleThreeForkScenarios:
         self.ai = MinMaxAI()
 
     def test_l_shape_fork(self):
-        """Fork en forme de L"""
+        """L-shaped fork"""
         #   . X .
         #   . X .
-        #   X X ?   <- jouer en ? crée double-three
-        self.board.place_stone(10, 8, 1)   # Vertical haut
-        self.board.place_stone(10, 9, 1)   # Vertical milieu
-        self.board.place_stone(9, 10, 1)   # Horizontal gauche
-        self.board.place_stone(10, 10, 1)  # Centre
+        #   X X ?   <- playing at ? creates double-three
+        self.board.place_stone(10, 8, 1)   # Vertical top
+        self.board.place_stone(10, 9, 1)   # Vertical middle
+        self.board.place_stone(9, 10, 1)   # Horizontal left
+        self.board.place_stone(10, 10, 1)  # Center
 
-        # Jouer en (11, 10) devrait créer un fork
+        # Playing at (11, 10) should create a fork
         score = self.ai._move_heuristic(self.board, (11, 10), 1)
-        # Le coup devrait avoir une priorité élevée (fork ou three)
+        # The move should have high priority (fork or three)
         assert score >= constants.MOVE_OPEN_THREE
 
 
@@ -157,21 +158,21 @@ class TestGetImmediateMove:
         self.ai = MinMaxAI()
 
     def test_immediate_win(self):
-        """L'IA joue le coup gagnant immédiatement"""
+        """AI plays the winning move immediately"""
         for i in range(4):
             self.board.place_stone(10 + i, 10, 1)
         move = self.ai._get_immediate_move(self.board, 1)
         assert move == (14, 10) or move == (9, 10)
 
     def test_immediate_block(self):
-        """L'IA bloque une victoire imminente"""
+        """AI blocks an imminent win"""
         for i in range(4):
             self.board.place_stone(10 + i, 10, 2)
         move = self.ai._get_immediate_move(self.board, 1)
         assert move == (14, 10) or move == (9, 10)
 
     def test_no_immediate_threat(self):
-        """Pas de coup immédiat si pas de menace critique"""
+        """No immediate move if no critical threat"""
         self.board.place_stone(10, 10, 1)
         self.board.place_stone(11, 11, 2)
         move = self.ai._get_immediate_move(self.board, 1)
