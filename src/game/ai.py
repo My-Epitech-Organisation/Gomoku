@@ -513,10 +513,19 @@ class MinMaxAI:
         if opp_threats["open_threes"] >= 1:
             return constants.MOVE_BLOCK_OPEN_THREE
 
+        # Block split three (XX.X, X.XX patterns) - critical to prevent open four
+        if opp_threats["split_threes"] >= 1:
+            return constants.MOVE_BLOCK_SPLIT_THREE
+
         # === 4. Evaluate move potential ===
         board.place_stone(x, y, player)
+        our_threats_final = self._count_threats(board, x, y, player)
         score = self._evaluate_position(board, x, y, player)
         board.undo_stone(x, y, player)
+
+        # Bonus for creating our own split three
+        if our_threats_final["split_threes"] >= 1:
+            return constants.MOVE_SPLIT_THREE
 
         if score >= constants.SCORE_OPEN_THREE:
             return constants.MOVE_OPEN_THREE
@@ -583,6 +592,7 @@ class MinMaxAI:
             "open_fours": 0,
             "closed_fours": 0,
             "open_threes": 0,
+            "split_threes": 0,
         }
         patterns = constants.PATTERNS[player]
 
@@ -611,6 +621,12 @@ class MinMaxAI:
 
             if patterns["threat"]["open_three"] in line:
                 threats["open_threes"] += 1
+            else:
+                # Check split three patterns (XX.X, X.XX, X.X.X)
+                for pat in patterns["threat"]["split_three"]:
+                    if pat in line:
+                        threats["split_threes"] += 1
+                        break
 
         return threats
 
