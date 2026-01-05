@@ -22,6 +22,10 @@ class Board:
         self.grid = [[0 for _ in range(width)] for _ in range(height)]
         self.move_count = 0
         self.current_hash = 0
+        # Incremental evaluation cache
+        self.eval_cache = {}  # (x, y, player) -> score
+        self.eval_totals = {1: 0, 2: 0}
+        self.eval_dirty = set()  # positions needing recalculation
 
     @classmethod
     def _init_zobrist(cls, width: int, height: int):
@@ -36,6 +40,7 @@ class Board:
             self.grid[y][x] = player
             self.move_count += 1
             self.current_hash ^= self.zobrist_table[y][x][player - 1]
+            self._invalidate_eval_region(x, y)
             return True
         return False
 
@@ -44,6 +49,15 @@ class Board:
             self.grid[y][x] = 0
             self.move_count -= 1
             self.current_hash ^= self.zobrist_table[y][x][player - 1]
+            self._invalidate_eval_region(x, y)
+
+    def _invalidate_eval_region(self, x: int, y: int) -> None:
+        """Mark positions in a radius of 4 as dirty for re-evaluation."""
+        for dy in range(-4, 5):
+            for dx in range(-4, 5):
+                nx, ny = x + dx, y + dy
+                if 0 <= nx < self.width and 0 <= ny < self.height:
+                    self.eval_dirty.add((nx, ny))
 
     def get_valid_moves(self) -> List[Tuple[int, int]]:
         if self.move_count == 0:
@@ -108,4 +122,7 @@ class Board:
         new_board.grid = [row[:] for row in self.grid]
         new_board.move_count = self.move_count
         new_board.current_hash = self.current_hash
+        new_board.eval_cache = self.eval_cache.copy()
+        new_board.eval_totals = self.eval_totals.copy()
+        new_board.eval_dirty = self.eval_dirty.copy()
         return new_board

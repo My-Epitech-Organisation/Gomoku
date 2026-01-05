@@ -26,6 +26,18 @@ DEFENSE_MULTIPLIER = 1.1
 TIME_LIMIT = 4.75
 MAX_DEPTH = 12
 
+# Time Banking - use remaining time to warm TT
+TIME_BANK_ENABLED = True
+RESPONSE_DEADLINE = 4.70  # Return move at this time (300ms safety margin)
+MIN_THINKING_TIME = 0.1   # Always think at least this long
+TT_WARMUP_DEPTH = 4       # Depth for warming TT during time bank
+
+# Pondering - calculate during opponent's turn
+PONDER_ENABLED = True
+PONDER_PREDICTIONS = 5    # Top N opponent moves to explore
+PONDER_MAX_DEPTH = 6      # Max depth during pondering
+PONDER_POLL_INTERVAL = 0.1  # Poll interval in seconds
+
 DOUBLE_THREE_BONUS = 20_000
 DOUBLE_FOUR_BONUS = 50_000
 CENTER_CONTROL = 10

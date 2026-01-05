@@ -26,39 +26,104 @@ class MinMaxAI:
         self.stop_search = False
         self.nodes = 0
         self.transposition_table = {}
+        self.killer_moves = {}
         self.age = 0
 
     def get_best_move(self, board, player: int) -> Optional[Tuple[int, int]]:
         self.stop_search = False
         self.nodes = 0
         self.age += 1
+        start_time = time.time()
+
+        # Phase 1: Check for immediate/forced moves
+        immediate_move = self._get_immediate_move(board, player)
+
+        # Phase 2: Threat Space Search (VCT) if no immediate move
+        vct_move = None
+        if immediate_move is None:
+            vct_move = self._threat_space_search(board, player, max_depth=14, time_limit=1.5)
+            if vct_move is not None:
+                print(f"[AI] VCT found: {vct_move}", file=sys.stderr)
+
+        # Determine if we have a decided move
+        decided_move = immediate_move or vct_move
+
+        # Phase 3: Time Banking or Full Search
+        if decided_move is not None and constants.TIME_BANK_ENABLED:
+            # We have a forced move - use remaining time to warm TT
+            return self._time_banked_return(board, player, decided_move, start_time)
+        elif decided_move is not None:
+            # Time banking disabled - return immediately
+            return decided_move
+        else:
+            # No forced move - do full iterative deepening search
+            return self._full_iterative_search(board, player, start_time)
+
+    def _time_banked_return(
+        self,
+        board,
+        player: int,
+        decided_move: Tuple[int, int],
+        start_time: float
+    ) -> Tuple[int, int]:
+        """
+        Return decided move at deadline, using remaining time to warm TT.
+        This pre-computes positions for likely future moves.
+        """
+        elapsed = time.time() - start_time
+        remaining = constants.RESPONSE_DEADLINE - elapsed
+
+        if remaining < constants.MIN_THINKING_TIME:
+            return decided_move
+
+        # Create board with our decided move played
+        future_board = board.copy()
+        future_board.place_stone(decided_move[0], decided_move[1], player)
+
+        # Predict opponent responses and search them to warm TT
+        opponent = 3 - player
+        predicted_responses = self._get_top_opponent_moves(future_board, opponent, count=3)
+
+        def warm_tt_thread():
+            """Background: shallow search on predicted positions."""
+            for pred_move in predicted_responses:
+                if self.stop_search:
+                    break
+                pred_board = future_board.copy()
+                pred_board.place_stone(pred_move[0], pred_move[1], opponent)
+                # Shallow search to populate TT
+                self._search_at_depth(pred_board, player, depth=constants.TT_WARMUP_DEPTH)
+
+        thread = threading.Thread(target=warm_tt_thread, daemon=True)
+        thread.start()
+
+        # Wait until deadline
+        time.sleep(max(0, remaining - 0.05))  # 50ms safety margin
+        self.stop_search = True
+        thread.join(timeout=0.05)
+
+        print(
+            f"[AI] Time banked: warmed TT for {len(predicted_responses)} predictions",
+            file=sys.stderr,
+        )
+
+        return decided_move
+
+    def _full_iterative_search(
+        self,
+        board,
+        player: int,
+        start_time: float
+    ) -> Optional[Tuple[int, int]]:
+        """Full iterative deepening search with time control."""
         best_move = [None]
 
-        immediate_move = self._get_immediate_move(board, player)
-        if immediate_move is not None:
-            return immediate_move
-
-        # Threat Space Search - find forced wins (VCT)
-        vct_move = self._threat_space_search(board, player, max_depth=10, time_limit=1.0)
-        if vct_move is not None:
-            print(f"[AI] VCT found: {vct_move}", file=sys.stderr)
-            return vct_move
-
         def search_thread():
-            start_time = time.time()
-            current_best = None
-
-            moves = board.get_valid_moves()
-            if not moves:
-                return
-
             current_depth = 1
-
             while not self.stop_search:
                 move, value = self._search_at_depth(board, player, current_depth)
                 if move is not None:
-                    current_best = move
-                    best_move[0] = current_best
+                    best_move[0] = move
                 current_depth += 1
 
             elapsed = time.time() - start_time
@@ -68,12 +133,32 @@ class MinMaxAI:
                 file=sys.stderr,
             )
 
-        thread = threading.Thread(target=search_thread)
-        thread.daemon = True
+        thread = threading.Thread(target=search_thread, daemon=True)
         thread.start()
-        time.sleep(self.time_limit)
+
+        elapsed = time.time() - start_time
+        remaining = constants.RESPONSE_DEADLINE - elapsed
+        time.sleep(max(0, remaining))
+
         self.stop_search = True
+        thread.join(timeout=0.1)
+
         return best_move[0]
+
+    def _get_top_opponent_moves(
+        self,
+        board,
+        opponent: int,
+        count: int = 5
+    ) -> List[Tuple[int, int]]:
+        """Get top N predicted opponent moves by heuristic."""
+        moves = board.get_valid_moves()
+        scored_moves = []
+        for move in moves:
+            score = self._move_heuristic(board, move, opponent)
+            scored_moves.append((move, score))
+        scored_moves.sort(key=lambda x: -x[1])
+        return [m[0] for m in scored_moves[:count]]
 
     def _get_best_move_fixed_depth(
         self, board, player: int
@@ -137,8 +222,11 @@ class MinMaxAI:
         self.nodes += 1
 
         hash_key = board.current_hash
+        tt_best_move = None
+
         if hash_key in self.transposition_table:
             entry = self.transposition_table[hash_key]
+            tt_best_move = entry.get("best_move")
             if entry["age"] == self.age and entry["depth"] >= depth:
                 if entry["flag"] == constants.EXACT:
                     return entry["value"]
@@ -151,17 +239,34 @@ class MinMaxAI:
             return self.evaluate(board) * (1 if current_player == 1 else -1)
 
         max_eval = -constants.INFINITY
+        best_move = None
         moves = board.get_valid_moves()
         opponent = 3 - current_player
         original_alpha = alpha
+
+        # Move ordering: TT best move first, then killer moves
+        if tt_best_move and tt_best_move in moves:
+            moves.remove(tt_best_move)
+            moves.insert(0, tt_best_move)
+
+        killers = self.killer_moves.get(depth, [])
+        for killer in reversed(killers):
+            if killer in moves and killer != tt_best_move:
+                moves.remove(killer)
+                moves.insert(1 if tt_best_move else 0, killer)
 
         for move in moves:
             board.place_stone(move[0], move[1], current_player)
             eval = -self.negamax(board, depth - 1, -beta, -alpha, opponent)
             board.undo_stone(move[0], move[1], current_player)
-            max_eval = max(max_eval, eval)
+
+            if eval > max_eval:
+                max_eval = eval
+                best_move = move
+
             alpha = max(alpha, eval)
             if alpha >= beta:
+                self._add_killer_move(depth, move)
                 break
 
         if max_eval <= original_alpha:
@@ -175,22 +280,52 @@ class MinMaxAI:
             "depth": depth,
             "flag": flag,
             "age": self.age,
+            "best_move": best_move,
         }
 
         return max_eval
 
+    def _add_killer_move(self, depth: int, move: Tuple[int, int]) -> None:
+        """Track killer moves (moves that cause beta cutoffs)."""
+        if depth not in self.killer_moves:
+            self.killer_moves[depth] = []
+        killers = self.killer_moves[depth]
+        if move not in killers:
+            killers.insert(0, move)
+            if len(killers) > 2:
+                killers.pop()
+
     def evaluate(self, board) -> int:
-        player_total = 0
-        opponent_total = 0
-        for y in range(board.height):
-            for x in range(board.width):
-                if board.grid[y][x] == 1:
-                    player_total += self._evaluate_position(board, x, y, 1)
-                elif board.grid[y][x] == 2:
-                    opponent_total += self._evaluate_position(board, x, y, 2)
+        # If cache is empty and board has stones, do full evaluation
+        if not board.eval_cache and board.move_count > 0:
+            for y in range(board.height):
+                for x in range(board.width):
+                    stone = board.grid[y][x]
+                    if stone != 0:
+                        score = self._evaluate_position(board, x, y, stone)
+                        board.eval_cache[(x, y, stone)] = score
+                        board.eval_totals[stone] += score
+            board.eval_dirty.clear()
+        else:
+            # Process dirty positions (incremental update)
+            for x, y in board.eval_dirty:
+                stone = board.grid[y][x]
+                # Remove old cached score if exists
+                for player in [1, 2]:
+                    key = (x, y, player)
+                    if key in board.eval_cache:
+                        board.eval_totals[player] -= board.eval_cache[key]
+                        del board.eval_cache[key]
+                # Add new score if position has a stone
+                if stone != 0:
+                    score = self._evaluate_position(board, x, y, stone)
+                    board.eval_cache[(x, y, stone)] = score
+                    board.eval_totals[stone] += score
+            board.eval_dirty.clear()
+
         return int(
-            constants.ATTACK_MULTIPLIER * player_total
-            - constants.DEFENSE_MULTIPLIER * opponent_total
+            constants.ATTACK_MULTIPLIER * board.eval_totals[1]
+            - constants.DEFENSE_MULTIPLIER * board.eval_totals[2]
         )
 
     def _evaluate_position(self, board, x: int, y: int, player: int) -> int:
@@ -525,7 +660,7 @@ class MinMaxAI:
                 key=lambda m: -self._move_heuristic(board, m, attacker)
             )
 
-            for move in threat_moves[:4]:
+            for move in threat_moves[:8]:
                 x, y = move
                 board.place_stone(x, y, attacker)
 
@@ -552,7 +687,7 @@ class MinMaxAI:
                 key=lambda m: -self._move_heuristic(board, m, current_player)
             )
 
-            for move in defense_moves[:3]:
+            for move in defense_moves[:6]:
                 x, y = move
                 board.place_stone(x, y, current_player)
 
@@ -569,12 +704,13 @@ class MinMaxAI:
             return True
 
     def _threat_space_search(
-        self, board, player: int, max_depth: int = 10, time_limit: float = 1.0
+        self, board, player: int, max_depth: int = 14, time_limit: float = 1.5
     ) -> Optional[Tuple[int, int]]:
         """
         Search for Victory by Continuous Threats (VCT).
 
         Returns the move leading to a forced win, or None.
+        Uses iterative deepening to find quick wins first.
         """
         start_time = time.time()
 
@@ -588,23 +724,28 @@ class MinMaxAI:
         threat_moves.sort(
             key=lambda m: -self._move_heuristic(board, m, player)
         )
-        threat_moves = threat_moves[:8]
+        threat_moves = threat_moves[:16]
 
-        for move in threat_moves:
-            if time.time() - start_time > time_limit:
+        # Iterative deepening: try shallow depths first for quick wins
+        for vct_depth in [6, 10, max_depth]:
+            if time.time() - start_time > time_limit * 0.9:
                 break
 
-            x, y = move
-            board.place_stone(x, y, player)
+            for move in threat_moves:
+                if time.time() - start_time > time_limit:
+                    break
 
-            vct_found = self._vct_search(
-                board, 3 - player, player,
-                depth=1, max_depth=max_depth
-            )
+                x, y = move
+                board.place_stone(x, y, player)
 
-            board.undo_stone(x, y, player)
+                vct_found = self._vct_search(
+                    board, 3 - player, player,
+                    depth=1, max_depth=vct_depth
+                )
 
-            if vct_found:
-                return move
+                board.undo_stone(x, y, player)
+
+                if vct_found:
+                    return move
 
         return None

@@ -12,7 +12,7 @@ from typing import Optional
 
 import constants
 from communication import CommunicationManager
-from game import Board, MinMaxAI
+from game import Board, MinMaxAI, PonderManager
 from game import constants as game_constants
 
 
@@ -20,6 +20,7 @@ class GameContext:
     def __init__(self):
         self.board: Optional[Board] = None
         self.ai: Optional[MinMaxAI] = None
+        self.ponder_manager: Optional[PonderManager] = None
         self.player_stone = 1
         self.opponent_stone = 2
 
@@ -30,6 +31,8 @@ class GameContext:
             time_limit=game_constants.TIME_LIMIT,
             use_iterative_deepening=True,
         )
+        if game_constants.PONDER_ENABLED:
+            self.ponder_manager = PonderManager(self.ai)
 
     def get_opening_move(self) -> tuple[int, int]:
         if self.board is None:
@@ -98,4 +101,14 @@ class GameContext:
 if __name__ == "__main__":
     context = GameContext()
     manager = CommunicationManager(context)
+    # PonderManager will be set after initialize_board is called
+    # We need to hook it up dynamically
+    original_init = context.initialize_board
+
+    def init_with_ponder(width: int, height: int) -> None:
+        original_init(width, height)
+        if context.ponder_manager is not None:
+            manager.ponder_manager = context.ponder_manager
+
+    context.initialize_board = init_with_ponder
     manager.run()

@@ -183,3 +183,93 @@ class TestTSSIntegration:
         move = self.ai.get_best_move(self.board, 1)
         # Must block at (14,10) or (9,10)
         assert move in [(14, 10), (9, 10)]
+
+
+class TestVerticalThreatDetection:
+    """Test for the vertical threat scenario from the lost game."""
+
+    def setup_method(self):
+        self.board = Board(20, 20)
+        self.ai = MinMaxAI()
+
+    def test_detects_vertical_four(self):
+        """AI must block vertical four before opponent wins"""
+        # Opponent has 4 stones vertically on column 12
+        self.board.place_stone(12, 8, 2)
+        self.board.place_stone(12, 9, 2)
+        self.board.place_stone(12, 10, 2)
+        self.board.place_stone(12, 11, 2)
+        # Place a player stone to make it a valid game state
+        self.board.place_stone(10, 10, 1)
+
+        move = self.ai.get_best_move(self.board, 1)
+        # Must block at (12, 7) or (12, 12)
+        assert move in [(12, 7), (12, 12)]
+
+    def test_detects_vertical_three_building(self):
+        """AI detects vertical threat being built"""
+        # Opponent building vertical threat on column 12
+        self.board.place_stone(12, 9, 2)
+        self.board.place_stone(12, 10, 2)
+        self.board.place_stone(12, 11, 2)
+        # Player stones
+        self.board.place_stone(10, 10, 1)
+        self.board.place_stone(11, 10, 1)
+
+        move = self.ai.get_best_move(self.board, 1)
+        # Should either block or create own winning threat
+        assert move is not None
+
+
+class TestIncrementalEvaluation:
+    """Tests for incremental evaluation correctness."""
+
+    def setup_method(self):
+        self.board = Board(20, 20)
+        self.ai = MinMaxAI()
+
+    def test_incremental_matches_full_eval(self):
+        """Incremental evaluation matches full recalculation"""
+        # Place some stones
+        self.board.place_stone(10, 10, 1)
+        self.board.place_stone(11, 10, 2)
+        self.board.place_stone(10, 11, 1)
+        self.board.place_stone(9, 9, 2)
+
+        # First evaluation (full)
+        eval1 = self.ai.evaluate(self.board)
+
+        # Reset cache and recalculate
+        self.board.eval_cache.clear()
+        self.board.eval_totals = {1: 0, 2: 0}
+
+        eval2 = self.ai.evaluate(self.board)
+
+        assert eval1 == eval2
+
+    def test_incremental_after_move(self):
+        """Evaluation updates correctly after new move"""
+        self.board.place_stone(10, 10, 1)
+        eval1 = self.ai.evaluate(self.board)
+
+        # Add more stones
+        self.board.place_stone(11, 10, 1)
+        self.board.place_stone(12, 10, 1)
+        eval2 = self.ai.evaluate(self.board)
+
+        # Score should increase with more aligned stones
+        assert eval2 > eval1
+
+    def test_incremental_after_undo(self):
+        """Evaluation updates correctly after undo"""
+        self.board.place_stone(10, 10, 1)
+        self.board.place_stone(11, 10, 1)
+        self.board.place_stone(12, 10, 1)
+        eval_with_three = self.ai.evaluate(self.board)
+
+        # Undo last move
+        self.board.undo_stone(12, 10, 1)
+        eval_with_two = self.ai.evaluate(self.board)
+
+        # Score should be lower
+        assert eval_with_two < eval_with_three
