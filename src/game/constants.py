@@ -79,6 +79,7 @@ SCORE_CLOSED_TWO = 50
 SCORE_SPLIT_FOUR = 15_000
 SCORE_SPLIT_THREE = 3_000
 SCORE_BROKEN_THREE = 4_000
+SCORE_GAPPED_THREE = 2_500  # XX..X, X..XX, X.X.X - 2 gaps
 
 DOUBLE_OPEN_THREE = 20_000
 THREAT_THREE_COMBO = 15_000
@@ -102,7 +103,15 @@ MOVE_BLOCK_SPLIT_THREE = 40_000_000    # Split three → open four next move
 MOVE_OPEN_THREE = 10_000_000
 MOVE_SPLIT_THREE = 8_000_000
 MOVE_BLOCK_OPEN_THREE = 5_000_000
+MOVE_BLOCK_GAPPED_THREE = 4_000_000  # Block gapped three (XX..X, X.X.X)
 MOVE_BLOCK_BUILDING_TWO = 2_000_000  # Proactive defense - stop .XX. from becoming .XXX.
+
+# Gapped three creation (lower priority than split_three)
+MOVE_GAPPED_THREE = 6_000_000
+
+# Intersection bonus - moves that block multiple opponent development lines
+INTERSECTION_BONUS_2 = 1_500_000   # Blocks 2 development lines
+INTERSECTION_BONUS_3 = 5_000_000   # Blocks 3+ development lines
 
 # Threshold for immediate move (triggers time banking)
 # Lower than MOVE_BLOCK_OPEN_FOUR to include split_three blocks
@@ -146,6 +155,11 @@ def _init_patterns():
                     "broken_open_three": [
                         f".{player_str * 2}.{player_str}.",
                         f".{player_str}.{player_str * 2}.",
+                    ],
+                    "gapped_three": [
+                        f"{player_str * 2}..{player_str}",      # XX..X - 2 consecutive gaps
+                        f"{player_str}..{player_str * 2}",      # X..XX - 2 consecutive gaps
+                        f"{player_str}.{player_str}.{player_str}",  # X.X.X - 2 single gaps
                     ],
                 },
                 "development": {

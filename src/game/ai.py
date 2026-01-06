@@ -1031,28 +1031,39 @@ class MinMaxAI:
         opp_threats = self._count_threats(board, x, y, opponent)
         board.undo_stone(x, y, opponent)
 
+        # Calculate intersection bonus early - applies to blocking moves too
+        opp_dev_lines = self._count_development_lines(board, x, y, opponent)
+        intersection_bonus = 0
+        if opp_dev_lines >= 3:
+            intersection_bonus = constants.INTERSECTION_BONUS_3
+        elif opp_dev_lines >= 2:
+            intersection_bonus = constants.INTERSECTION_BONUS_2
+
         opp_fours = opp_threats["open_fours"] + opp_threats["closed_fours"]
 
         if opp_fours >= 2:
-            return constants.MOVE_BLOCK_DOUBLE_FOUR
+            return constants.MOVE_BLOCK_DOUBLE_FOUR + intersection_bonus
 
         if opp_fours >= 1 and opp_threats["open_threes"] >= 1:
-            return constants.MOVE_BLOCK_FOUR_THREE
+            return constants.MOVE_BLOCK_FOUR_THREE + intersection_bonus
 
         if opp_threats["open_fours"] >= 1:
-            return constants.MOVE_BLOCK_OPEN_FOUR
+            return constants.MOVE_BLOCK_OPEN_FOUR + intersection_bonus
 
         if opp_threats.get("pre_open_fours", 0) >= 1:
-            return constants.MOVE_BLOCK_PRE_OPEN_FOUR
+            return constants.MOVE_BLOCK_PRE_OPEN_FOUR + intersection_bonus
 
         if opp_threats["split_threes"] >= 1:
-            return constants.MOVE_BLOCK_SPLIT_THREE
+            return constants.MOVE_BLOCK_SPLIT_THREE + intersection_bonus
 
         if opp_threats["open_threes"] >= 1:
-            return constants.MOVE_BLOCK_OPEN_THREE
+            return constants.MOVE_BLOCK_OPEN_THREE + intersection_bonus
+
+        if opp_threats.get("gapped_threes", 0) >= 1:
+            return constants.MOVE_BLOCK_GAPPED_THREE + intersection_bonus
 
         if opp_threats.get("building_twos", 0) >= 1:
-            return constants.MOVE_BLOCK_BUILDING_TWO
+            return constants.MOVE_BLOCK_BUILDING_TWO + intersection_bonus
 
         board.place_stone(x, y, player)
         our_threats_final = self._count_threats(board, x, y, player)
@@ -1062,10 +1073,14 @@ class MinMaxAI:
         if our_threats_final["split_threes"] >= 1:
             return constants.MOVE_SPLIT_THREE
 
+        if our_threats_final.get("gapped_threes", 0) >= 1:
+            return constants.MOVE_GAPPED_THREE
+
         if score >= constants.SCORE_OPEN_THREE:
             return constants.MOVE_OPEN_THREE
 
-        return score
+        # Add intersection bonus (already calculated above)
+        return score + intersection_bonus
 
     def _has_winning_move(self, board, player: int) -> bool:
         """Check if player has a winning move."""
@@ -1226,6 +1241,7 @@ class MinMaxAI:
             "closed_fours": 0,
             "open_threes": 0,
             "split_threes": 0,
+            "gapped_threes": 0,   # XX..X, X..XX, X.X.X - 2 gaps
             "pre_open_fours": 0,  # .XXX. pattern - becomes open four
             "building_twos": 0,   # .XX. pattern - can become open three
         }
@@ -1266,17 +1282,41 @@ class MinMaxAI:
             if patterns["threat"]["open_three"] in line:
                 threats["open_threes"] += 1
             else:
-                # Check split three patterns (XX.X, X.XX, X.X.X)
+                # Check split three patterns (XX.X, X.XX)
                 for pat in patterns["threat"]["split_three"]:
                     if pat in line:
                         threats["split_threes"] += 1
                         break
+
+            # Check gapped three patterns (XX..X, X..XX, X.X.X) - 2 gaps
+            for pat in patterns["threat"]["gapped_three"]:
+                if pat in line:
+                    threats["gapped_threes"] += 1
+                    break
 
             # Check building two (.XX. - can become open three)
             if building_two_pattern in line:
                 threats["building_twos"] += 1
 
         return threats
+
+    def _count_development_lines(self, board, x: int, y: int, player: int) -> int:
+        """
+        Count how many development lines pass through (x,y) for player.
+        A development line has 2+ player stones in the same direction.
+        Used for intersection bonus calculation.
+        """
+        count = 0
+        player_str = str(player)
+
+        for dx, dy in constants.DIRECTIONS:
+            line = self._get_line(board, x, y, dx, dy)
+            # Count if this direction has 2+ player stones nearby
+            player_stones = line.count(player_str)
+            if player_stones >= 2:
+                count += 1
+
+        return count
 
     def _scan_board_threats(self, board, opponent: int) -> dict:
         """
@@ -1287,6 +1327,7 @@ class MinMaxAI:
             "fours": [],        # Four in a row (or split four)
             "open_threes": [],  # Open three (.XXX.)
             "split_threes": [], # Split three (XX.X, X.XX)
+            "gapped_threes": [], # Gapped three (XX..X, X..XX, X.X.X)
             "building_twos": [], # Two stones that can become three (.XX.)
         }
 
@@ -1401,6 +1442,25 @@ class MinMaxAI:
                     "positions": positions[idx:idx + len(pat)],
                     "direction": direction,
                     "gap": positions[idx + gap_offset]
+                })
+                idx += 1
+
+        # Check for gapped three patterns (XX..X, X..XX, X.X.X) - 2 gaps
+        gapped_patterns = [
+            (f"{opp_str * 2}..{opp_str}", [2, 3]),       # XX..X - gaps at 2,3
+            (f"{opp_str}..{opp_str * 2}", [1, 2]),       # X..XX - gaps at 1,2
+            (f"{opp_str}.{opp_str}.{opp_str}", [1, 3]),  # X.X.X - gaps at 1,3
+        ]
+        for pat, gap_offsets in gapped_patterns:
+            idx = 0
+            while True:
+                idx = line_str.find(pat, idx)
+                if idx == -1:
+                    break
+                threats["gapped_threes"].append({
+                    "positions": positions[idx:idx + len(pat)],
+                    "direction": direction,
+                    "gaps": [positions[idx + g] for g in gap_offsets]
                 })
                 idx += 1
 
