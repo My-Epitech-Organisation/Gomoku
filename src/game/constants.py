@@ -87,6 +87,11 @@ MOVE_BLOCK_SPLIT_THREE = 40_000_000    # Split three → open four next move
 MOVE_OPEN_THREE = 10_000_000
 MOVE_SPLIT_THREE = 8_000_000
 MOVE_BLOCK_OPEN_THREE = 5_000_000
+MOVE_BLOCK_BUILDING_TWO = 2_000_000  # Proactive defense - stop .XX. from becoming .XXX.
+
+# Threshold for immediate move (triggers time banking)
+# Lower than MOVE_BLOCK_OPEN_FOUR to include split_three blocks
+IMMEDIATE_MOVE_THRESHOLD = 40_000_000  # MOVE_BLOCK_SPLIT_THREE level
 
 PATTERNS = {1: None, 2: None}
 
@@ -120,9 +125,8 @@ def _init_patterns():
                         f"{player_str}.{player_str * 2}",
                     ],
                     "split_three": [
-                        f"{player_str}.{player_str}.{player_str}",
-                        f"{player_str * 2}..{player_str}",
-                        f"{player_str}..{player_str * 2}",
+                        f"{player_str * 2}.{player_str}",   # XX.X - 1 gap, urgent
+                        f"{player_str}.{player_str * 2}",   # X.XX - 1 gap, urgent
                     ],
                     "broken_open_three": [
                         f".{player_str * 2}.{player_str}.",

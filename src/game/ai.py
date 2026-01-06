@@ -11,6 +11,7 @@ import time
 from typing import List, Optional, Tuple
 
 from . import constants
+from utils.logger import get_logger
 
 
 class MinMaxAI:
@@ -34,29 +35,161 @@ class MinMaxAI:
         self.nodes = 0
         self.age += 1
         start_time = time.time()
+        logger = get_logger()
+        opponent = 3 - player
 
-        # Phase 1: Check for immediate/forced moves
-        immediate_move = self._get_immediate_move(board, player)
+        # Phase 0: Global threat scan - find critical opponent threats
+        board_threats = self._scan_board_threats(board, opponent)
+        logger.board_scan(board_threats)
+
+        # Collect force block move if any (don't return immediately - use time banking)
+        force_block_move = None
+
+        # Force block if opponent has a four (immediate loss otherwise)
+        if board_threats["fours"] and force_block_move is None:
+            for threat in board_threats["fours"]:
+                if threat["gap"]:
+                    logger.threat("FOUR", threat["positions"], threat["direction"])
+                    logger.info(f"Force blocking four at {threat['gap']}")
+                    force_block_move = threat["gap"]
+                    break
+            # Solid four with no gap - block at ends
+            if force_block_move is None:
+                for threat in board_threats["fours"]:
+                    positions = threat["positions"]
+                    # Find blocking positions at ends
+                    first_pos = positions[0]
+                    last_pos = positions[-1]
+                    # Calculate direction
+                    dx = 1 if positions[1][0] > positions[0][0] else (
+                        -1 if positions[1][0] < positions[0][0] else 0
+                    )
+                    dy = 1 if positions[1][1] > positions[0][1] else (
+                        -1 if positions[1][1] < positions[0][1] else 0
+                    )
+                    block1 = (first_pos[0] - dx, first_pos[1] - dy)
+                    block2 = (last_pos[0] + dx, last_pos[1] + dy)
+
+                    # Check validity of each block
+                    b1_valid = (0 <= block1[0] < board.width and
+                                0 <= block1[1] < board.height and
+                                board.grid[block1[1]][block1[0]] == 0)
+                    b2_valid = (0 <= block2[0] < board.width and
+                                0 <= block2[1] < board.height and
+                                board.grid[block2[1]][block2[0]] == 0)
+
+                    # Check if our stone is adjacent to each block (creates wall)
+                    # Position beyond block1 (even further before the four)
+                    beyond1 = (block1[0] - dx, block1[1] - dy)
+                    # Position beyond block2 (even further after the four)
+                    beyond2 = (block2[0] + dx, block2[1] + dy)
+
+                    b1_has_wall = (0 <= beyond1[0] < board.width and
+                                   0 <= beyond1[1] < board.height and
+                                   board.grid[beyond1[1]][beyond1[0]] == player)
+                    b2_has_wall = (0 <= beyond2[0] < board.width and
+                                   0 <= beyond2[1] < board.height and
+                                   board.grid[beyond2[1]][beyond2[0]] == player)
+
+                    # Prioritize block that creates a wall with our existing stone
+                    if b1_valid and b1_has_wall:
+                        logger.info(f"Force blocking solid four at {block1} (wall)")
+                        force_block_move = block1
+                        break
+                    if b2_valid and b2_has_wall:
+                        logger.info(f"Force blocking solid four at {block2} (wall)")
+                        force_block_move = block2
+                        break
+
+                    # Check if both blocks are needed (open four = unstoppable)
+                    if b1_valid and b2_valid:
+                        logger.warn(f"OPEN FOUR detected - unstoppable! Blocking {block2}")
+                        force_block_move = block2
+                        break
+
+                    # Fallback: any valid block
+                    if b1_valid:
+                        logger.info(f"Force blocking solid four at {block1}")
+                        force_block_move = block1
+                        break
+                    if b2_valid:
+                        logger.info(f"Force blocking solid four at {block2}")
+                        force_block_move = block2
+                        break
+
+        # Force block open threes before they become open fours
+        # An open three (.XXX.) blocked now prevents unstoppable open four
+        if board_threats["open_threes"] and force_block_move is None:
+            for threat in board_threats["open_threes"]:
+                blocks = threat.get("blocks", [])
+                if blocks:
+                    # Prefer the block that's closer to our existing stones
+                    best_block = None
+                    best_score = -1
+                    for block in blocks:
+                        bx, by = block
+                        if (0 <= bx < board.width and 0 <= by < board.height
+                                and board.grid[by][bx] == 0):
+                            # Score based on proximity to our stones
+                            score = 0
+                            for ddy in range(-2, 3):
+                                for ddx in range(-2, 3):
+                                    nx, ny = bx + ddx, by + ddy
+                                    if (0 <= nx < board.width and 0 <= ny < board.height
+                                            and board.grid[ny][nx] == player):
+                                        score += 1
+                            if score > best_score:
+                                best_score = score
+                                best_block = block
+                    if best_block:
+                        logger.info(f"Force blocking open three at {best_block} (prevent open four)")
+                        force_block_move = best_block
+                        break
+
+        # Force block split threes (X.XX, XX.X) - fill the gap to prevent four
+        # This was the Game 4 bug: split_three detected but not blocked
+        if board_threats["split_threes"] and force_block_move is None:
+            for threat in board_threats["split_threes"]:
+                gap = threat.get("gap")
+                if gap:
+                    gx, gy = gap
+                    if (0 <= gx < board.width and 0 <= gy < board.height
+                            and board.grid[gy][gx] == 0):
+                        logger.info(f"Force blocking split three at {gap} (fill gap)")
+                        force_block_move = gap
+                        break
+
+        # Phase 0.5: Early game - prefer connected moves near opponent
+        if force_block_move is None and board.move_count <= 4:
+            early_move = self._get_early_game_move(board, player, opponent)
+            if early_move:
+                logger.info(f"Early game move: {early_move}")
+                force_block_move = early_move
+
+        # Phase 1: Check for immediate/forced moves (if no force block)
+        immediate_move = None
+        if force_block_move is None:
+            immediate_move = self._get_immediate_move(board, player)
 
         # Phase 2: Threat Space Search (VCT) if no immediate move
         vct_move = None
-        if immediate_move is None:
+        if force_block_move is None and immediate_move is None:
             vct_move = self._threat_space_search(board, player, max_depth=14, time_limit=1.5)
             if vct_move is not None:
-                print(f"[AI] VCT found: {vct_move}", file=sys.stderr)
+                logger.info(f"VCT found: {vct_move}")
 
-        # Determine if we have a decided move
-        decided_move = immediate_move or vct_move
+        # Determine if we have a decided move (prioritize force_block)
+        decided_move = force_block_move or immediate_move or vct_move
 
-        # Phase 3: Time Banking or Full Search
+        # Phase 3: Time Banking on ALL decided moves, or Full Search
         if decided_move is not None and constants.TIME_BANK_ENABLED:
-            # We have a forced move - use remaining time to warm TT
+            # We have a decided move - use remaining time to warm TT
             return self._time_banked_return(board, player, decided_move, start_time)
         elif decided_move is not None:
             # Time banking disabled - return immediately
             return decided_move
         else:
-            # No forced move - do full iterative deepening search
+            # No decided move - do full iterative deepening search
             return self._full_iterative_search(board, player, start_time)
 
     def _time_banked_return(
@@ -70,16 +203,14 @@ class MinMaxAI:
         Return decided move at deadline, using remaining time to warm TT.
         This pre-computes positions for likely future moves.
         """
+        logger = get_logger()
         elapsed = time.time() - start_time
         remaining = constants.RESPONSE_DEADLINE - elapsed
 
-        print(
-            f"[AI] Time bank: elapsed={elapsed:.3f}s, remaining={remaining:.3f}s",
-            file=sys.stderr,
-        )
+        logger.debug(f"Time bank: elapsed={elapsed:.3f}s, remaining={remaining:.3f}s")
 
         if remaining < constants.MIN_THINKING_TIME:
-            print(f"[AI] Skipping time bank (remaining < {constants.MIN_THINKING_TIME}s)", file=sys.stderr)
+            logger.debug(f"Skipping time bank (remaining < {constants.MIN_THINKING_TIME}s)")
             return decided_move
 
         # Create board with our decided move played
@@ -108,12 +239,53 @@ class MinMaxAI:
         self.stop_search = True
         thread.join(timeout=0.05)
 
-        print(
-            f"[AI] Time banked: warmed TT for {len(predicted_responses)} predictions",
-            file=sys.stderr,
-        )
+        logger.debug(f"Time banked: warmed TT for {len(predicted_responses)} predictions")
 
         return decided_move
+
+    def _quick_tt_warm(
+        self,
+        board,
+        player: int,
+        our_move: Tuple[int, int],
+        time_budget: float
+    ) -> None:
+        """
+        Quick TT warming after iterative search.
+        Uses remaining time to pre-compute likely future positions.
+        """
+        logger = get_logger()
+
+        # Skip if budget too small (avoid timeout)
+        if time_budget < 0.15:
+            return
+
+        start = time.time()
+
+        # Create board with our move played
+        future_board = board.copy()
+        future_board.place_stone(our_move[0], our_move[1], player)
+
+        # Predict opponent responses (only 1-2 to stay fast)
+        opponent = 3 - player
+        predictions = self._get_top_opponent_moves(future_board, opponent, count=2)
+
+        self.stop_search = False
+        warmed = 0
+
+        for pred_move in predictions:
+            # Check time BEFORE starting search
+            if time.time() - start > time_budget * 0.8:
+                break
+
+            pred_board = future_board.copy()
+            pred_board.place_stone(pred_move[0], pred_move[1], opponent)
+
+            # Very shallow search to stay fast (depth 2 instead of 4)
+            self._search_at_depth(pred_board, player, depth=2)
+            warmed += 1
+
+        logger.debug(f"Quick TT warm: {warmed}/{len(predictions)} in {time.time()-start:.2f}s")
 
     def _warm_tt_background(self, board, player: int) -> None:
         """
@@ -121,6 +293,7 @@ class MinMaxAI:
         Continues until stop_search is set or work is done.
         Called from a daemon thread, so it won't block the response.
         """
+        logger = get_logger()
         self.stop_search = False
         opponent = 3 - player
 
@@ -136,10 +309,7 @@ class MinMaxAI:
             self._search_at_depth(pred_board, player, depth=constants.TT_WARMUP_DEPTH)
             warmed += 1
 
-        print(
-            f"[AI] Background TT warm: {warmed}/{len(predicted_responses)} done",
-            file=sys.stderr,
-        )
+        logger.debug(f"Background TT warm: {warmed}/{len(predicted_responses)} done")
 
     def _full_iterative_search(
         self,
@@ -148,13 +318,16 @@ class MinMaxAI:
         start_time: float
     ) -> Optional[Tuple[int, int]]:
         """Full iterative deepening search with time control and aspiration windows."""
+        logger = get_logger()
         best_move = [None]
+        final_depth = [1]
+        search_finished = [False]
 
         def search_thread():
             current_depth = 1
             previous_value = 0  # Initial guess for aspiration windows
 
-            while not self.stop_search:
+            while not self.stop_search and current_depth <= constants.MAX_DEPTH:
                 # Use aspiration windows for depth >= ASPIRATION_MIN_DEPTH
                 if current_depth >= constants.ASPIRATION_MIN_DEPTH:
                     alpha = previous_value - constants.ASPIRATION_DELTA
@@ -174,24 +347,29 @@ class MinMaxAI:
                     best_move[0] = move
                     previous_value = value
 
+                final_depth[0] = current_depth
                 current_depth += 1
 
-            elapsed = time.time() - start_time
-            print(
-                f"[AI] Stats: depth {current_depth-1}, nodes {self.nodes}, "
-                f"time {elapsed:.2f}s",
-                file=sys.stderr,
-            )
+            search_finished[0] = True
 
         thread = threading.Thread(target=search_thread, daemon=True)
         thread.start()
 
+        # Wait for search time (leave 0.3s safety margin)
+        search_time = constants.RESPONSE_DEADLINE - 0.3
         elapsed = time.time() - start_time
-        remaining = constants.RESPONSE_DEADLINE - elapsed
-        time.sleep(max(0, remaining - 0.15))  # 150ms margin for response latency
+        time.sleep(max(0, search_time - elapsed))
 
         self.stop_search = True
         thread.join(timeout=0.1)
+
+        total_elapsed = time.time() - start_time
+        logger.search(final_depth[0], self.nodes, total_elapsed, best_move[0])
+
+        # Time banking: use remaining time to warm TT for next turn (only if enough time)
+        remaining = constants.RESPONSE_DEADLINE - (time.time() - start_time)
+        if best_move[0] is not None and constants.TIME_BANK_ENABLED and remaining > 0.2:
+            self._quick_tt_warm(board, player, best_move[0], remaining - 0.15)
 
         return best_move[0]
 
@@ -630,6 +808,10 @@ class MinMaxAI:
         if opp_threats["open_threes"] >= 1:
             return constants.MOVE_BLOCK_OPEN_THREE
 
+        # Block building two (.XX. - proactive defense)
+        if opp_threats.get("building_twos", 0) >= 1:
+            return constants.MOVE_BLOCK_BUILDING_TWO
+
         # === 4. Evaluate move potential ===
         board.place_stone(x, y, player)
         our_threats_final = self._count_threats(board, x, y, player)
@@ -693,10 +875,83 @@ class MinMaxAI:
                 best_score = score
                 best_move = move
 
-        if best_score >= constants.MOVE_BLOCK_OPEN_FOUR:
+        # Use lower threshold to catch split_three blocks too
+        if best_score >= constants.IMMEDIATE_MOVE_THRESHOLD:
             return best_move
 
         return None
+
+    def _get_early_game_move(
+        self, board, player: int, opponent: int
+    ) -> Optional[Tuple[int, int]]:
+        """
+        Get a good move in the early game (first few moves).
+        Prioritizes moves that are:
+        1. Adjacent to our existing stones (connected)
+        2. Near opponent stones (contesting space)
+        3. Between our stone and opponent's stone
+        """
+        our_stones = []
+        opp_stones = []
+
+        for y in range(board.height):
+            for x in range(board.width):
+                if board.grid[y][x] == player:
+                    our_stones.append((x, y))
+                elif board.grid[y][x] == opponent:
+                    opp_stones.append((x, y))
+
+        if not our_stones or not opp_stones:
+            return None
+
+        # Find moves that are adjacent to our stones AND near opponent
+        best_move = None
+        best_score = -1
+
+        for ox, oy in our_stones:
+            # Check all adjacent positions
+            for dx in range(-2, 3):
+                for dy in range(-2, 3):
+                    if dx == 0 and dy == 0:
+                        continue
+                    nx, ny = ox + dx, oy + dy
+                    if (0 <= nx < board.width and 0 <= ny < board.height
+                            and board.grid[ny][nx] == 0):
+                        # Score based on:
+                        # - Distance 1 from our stone = +10
+                        # - Distance 2 from our stone = +5
+                        # - Proximity to opponent stones = +3 per nearby
+                        score = 0
+
+                        # Adjacency to our stones
+                        dist = max(abs(dx), abs(dy))
+                        if dist == 1:
+                            score += 10  # Directly adjacent
+                        else:
+                            score += 5   # 2 squares away
+
+                        # Proximity to opponent stones
+                        for ex, ey in opp_stones:
+                            opp_dist = max(abs(nx - ex), abs(ny - ey))
+                            if opp_dist <= 2:
+                                score += (3 - opp_dist) * 3  # Closer = better
+
+                        # Bonus for being between our stone and opponent
+                        for ex, ey in opp_stones:
+                            # Check if (nx, ny) is on the line between our stone and opponent
+                            if ox != ex or oy != ey:
+                                # Direction from our stone to opponent
+                                dir_x = 1 if ex > ox else (-1 if ex < ox else 0)
+                                dir_y = 1 if ey > oy else (-1 if ey < oy else 0)
+                                # Check if move is in this direction
+                                if dx == dir_x and dy == dir_y:
+                                    score += 8  # Between = strategic
+
+                        if score > best_score:
+                            best_score = score
+                            best_move = (nx, ny)
+
+        return best_move
 
     def _count_threats(self, board, x: int, y: int, player: int) -> dict:
         """Count threats created by a stone at (x, y)."""
@@ -707,11 +962,14 @@ class MinMaxAI:
             "open_threes": 0,
             "split_threes": 0,
             "pre_open_fours": 0,  # .XXX. pattern - becomes open four
+            "building_twos": 0,   # .XX. pattern - can become open three
         }
         patterns = constants.PATTERNS[player]
         player_str = str(player)
         # Pre-open-four pattern: .XXX. (3 in row with both ends open)
         pre_open_four_pattern = f".{player_str * 3}."
+        # Building two pattern: .XX. (2 in row with both ends open)
+        building_two_pattern = f".{player_str * 2}."
 
         for dx, dy in constants.DIRECTIONS:
             line = self._get_line(board, x, y, dx, dy)
@@ -749,7 +1007,170 @@ class MinMaxAI:
                         threats["split_threes"] += 1
                         break
 
+            # Check building two (.XX. - can become open three)
+            if building_two_pattern in line:
+                threats["building_twos"] += 1
+
         return threats
+
+    # ==================== GLOBAL THREAT SCANNING ====================
+
+    def _scan_board_threats(self, board, opponent: int) -> dict:
+        """
+        Scan entire board for opponent threat patterns.
+        Returns dict of critical threats requiring immediate action.
+        """
+        threats = {
+            "fours": [],        # Four in a row (or split four)
+            "open_threes": [],  # Open three (.XXX.)
+            "split_threes": [], # Split three (XX.X, X.XX)
+            "building_twos": [], # Two stones that can become three (.XX.)
+        }
+
+        opp_str = str(opponent)
+
+        # Scan all 4 directions
+        for dx, dy in constants.DIRECTIONS:
+            direction_name = self._direction_name(dx, dy)
+
+            # Scan rows/columns/diagonals
+            if dx == 1 and dy == 0:  # Horizontal
+                for y in range(board.height):
+                    self._scan_line(
+                        board, 0, y, dx, dy, opponent, threats, direction_name
+                    )
+            elif dx == 0 and dy == 1:  # Vertical
+                for x in range(board.width):
+                    self._scan_line(
+                        board, x, 0, dx, dy, opponent, threats, direction_name
+                    )
+            elif dx == 1 and dy == 1:  # Diagonal backslash
+                for start in range(board.width + board.height - 1):
+                    x = max(0, start - board.height + 1)
+                    y = max(0, board.height - 1 - start)
+                    self._scan_line(
+                        board, x, y, dx, dy, opponent, threats, direction_name
+                    )
+            elif dx == 1 and dy == -1:  # Diagonal slash
+                for start in range(board.width + board.height - 1):
+                    x = max(0, start - board.height + 1)
+                    y = min(board.height - 1, start)
+                    self._scan_line(
+                        board, x, y, dx, dy, opponent, threats, direction_name
+                    )
+
+        return threats
+
+    def _scan_line(
+        self,
+        board,
+        start_x: int,
+        start_y: int,
+        dx: int,
+        dy: int,
+        opponent: int,
+        threats: dict,
+        direction: str
+    ):
+        """Scan a single line for threat patterns."""
+        opp_str = str(opponent)
+        line = []
+        positions = []
+
+        x, y = start_x, start_y
+        while 0 <= x < board.width and 0 <= y < board.height:
+            stone = board.grid[y][x]
+            line.append(str(stone) if stone else ".")
+            positions.append((x, y))
+            x += dx
+            y += dy
+
+        if len(positions) < 4:
+            return
+
+        line_str = "".join(line)
+
+        # Check for four (XXXX or XXX.X, etc)
+        four_patterns = [
+            (opp_str * 4, None),
+            (f"{opp_str * 3}.{opp_str}", 3),
+            (f"{opp_str}.{opp_str * 3}", 1),
+            (f"{opp_str * 2}.{opp_str * 2}", 2),
+        ]
+        for pat, gap_offset in four_patterns:
+            idx = 0
+            while True:
+                idx = line_str.find(pat, idx)
+                if idx == -1:
+                    break
+                threat_positions = positions[idx:idx + len(pat)]
+                gap_pos = positions[idx + gap_offset] if gap_offset is not None else None
+                threats["fours"].append({
+                    "positions": threat_positions,
+                    "direction": direction,
+                    "gap": gap_pos,
+                    "pattern": pat
+                })
+                idx += 1
+
+        # Check for open three .XXX.
+        open_three = f".{opp_str * 3}."
+        idx = 0
+        while True:
+            idx = line_str.find(open_three, idx)
+            if idx == -1:
+                break
+            threats["open_threes"].append({
+                "positions": positions[idx:idx + 5],
+                "direction": direction,
+                "blocks": [positions[idx], positions[idx + 4]]
+            })
+            idx += 1
+
+        # Check for split three patterns (XX.X, X.XX)
+        split_patterns = [
+            (f"{opp_str * 2}.{opp_str}", 2),  # XX.X
+            (f"{opp_str}.{opp_str * 2}", 1),  # X.XX
+        ]
+        for pat, gap_offset in split_patterns:
+            idx = 0
+            while True:
+                idx = line_str.find(pat, idx)
+                if idx == -1:
+                    break
+                threats["split_threes"].append({
+                    "positions": positions[idx:idx + len(pat)],
+                    "direction": direction,
+                    "gap": positions[idx + gap_offset]
+                })
+                idx += 1
+
+        # Check for building twos (.XX. patterns that can become open three)
+        # This is proactive defense - stop threats before they become critical
+        building_two = f".{opp_str * 2}."
+        idx = 0
+        while True:
+            idx = line_str.find(building_two, idx)
+            if idx == -1:
+                break
+            # Extension points are the dots on either side
+            threats["building_twos"].append({
+                "positions": positions[idx:idx + 4],
+                "direction": direction,
+                "extensions": [positions[idx], positions[idx + 3]]
+            })
+            idx += 1
+
+    def _direction_name(self, dx: int, dy: int) -> str:
+        """Get human-readable direction name."""
+        if dx == 1 and dy == 0:
+            return "horizontal"
+        elif dx == 0 and dy == 1:
+            return "vertical"
+        elif dx == 1 and dy == 1:
+            return "diagonal_\\"
+        else:
+            return "diagonal_/"
 
     # ==================== THREAT SPACE SEARCH (TSS) ====================
 
