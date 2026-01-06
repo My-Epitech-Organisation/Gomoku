@@ -28,10 +28,10 @@ MAX_DEPTH = 12
 
 # Time Banking - use remaining time to warm TT
 TIME_BANK_ENABLED = True
-RESPONSE_DEADLINE = 4.50  # Return move at this time (500ms safety margin)
+RESPONSE_DEADLINE = 4.30  # Return move at this time (700ms safety margin from 5s limit)
 MIN_THINKING_TIME = 0.1   # Always think at least this long
-TT_WARMUP_DEPTH = 8       # Depth for warming TT during time bank (increased for productive warming)
-TT_WARMUP_POSITIONS = 5   # Number of opponent responses to explore during warming
+TT_WARMUP_DEPTH = 6       # Depth for warming TT during time bank (reduced from 8 to prevent timeout)
+TT_WARMUP_POSITIONS = 4   # Number of opponent responses to explore during warming
 
 # Pondering - calculate during opponent's turn
 PONDER_ENABLED = True

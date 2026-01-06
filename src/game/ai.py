@@ -306,13 +306,15 @@ class MinMaxAI:
         thread = threading.Thread(target=productive_thread, daemon=True)
         thread.start()
 
-        # Wait until deadline (with 150ms safety margin)
-        sleep_time = max(0, remaining - 0.15)
-        time.sleep(sleep_time)
+        current_elapsed = time.time() - start_time
+        actual_remaining = constants.RESPONSE_DEADLINE - current_elapsed
+        sleep_time = max(0, actual_remaining - 0.30)
+        if sleep_time > 0:
+            time.sleep(sleep_time)
 
         # Signal stop and wait for cleanup
         self.stop_search = True
-        thread.join(timeout=0.05)
+        thread.join(timeout=0.03)
 
         # Return better move if found, otherwise decided move
         final_move = better_move[0] if better_move[0] else decided_move
