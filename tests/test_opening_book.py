@@ -164,7 +164,7 @@ class TestOpeningBookSingleton:
 
     def test_singleton_different_sizes(self):
         """Different sizes should create new instances."""
-        book20 = get_opening_book(20)
+        get_opening_book(20)
         book15 = get_opening_book(15)
         # After getting size 15, singleton is now 15
         # This is expected behavior

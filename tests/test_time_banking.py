@@ -59,7 +59,7 @@ class TestTimeBanking:
 
         initial_tt_size = len(self.ai.transposition_table)
 
-        move = self.ai.get_best_move(self.board, 1)
+        self.ai.get_best_move(self.board, 1)
 
         # TT should have more entries (from warming)
         final_tt_size = len(self.ai.transposition_table)
@@ -138,8 +138,7 @@ class TestPonderManager:
         if len(self.ponder_mgr.predictions) > 0:
             # Get one of the predicted moves
             pred_move = list(self.ponder_mgr.predictions.keys())[0]
-            result = self.ponder_mgr.on_opponent_move(pred_move[0], pred_move[1])
-            # Should return cached result (could be None if prediction thread didn't finish)
+            self.ponder_mgr.on_opponent_move(pred_move[0], pred_move[1])
             # The key thing is it should have cleared predictions
             assert len(self.ponder_mgr.predictions) == 0
 

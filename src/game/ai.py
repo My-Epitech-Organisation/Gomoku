@@ -5,7 +5,6 @@
 ## ai
 ##
 
-import sys
 import threading
 import time
 from typing import List, Optional, Tuple
@@ -288,7 +287,6 @@ class MinMaxAI:
             # Only search for counter-attack if we're defending (not winning)
             # This avoids wasting time when we already have a winning move
             attack_budget = remaining * 0.35
-            attack_start = time.time()
 
             # Quick VCT search to see if we have a winning sequence
             try:

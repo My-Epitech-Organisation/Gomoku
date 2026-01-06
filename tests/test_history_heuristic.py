@@ -261,8 +261,6 @@ class TestHistoryIntegration:
         self.ai.get_best_move(self.board, 1)
 
         # History should still exist (possibly decayed)
-        # New entries may have been added
-        total_before = sum(history_after_first.values())
         total_after = sum(self.ai.history_table[1].values())
         # Can't guarantee relationship, just that it works
         assert isinstance(total_after, (int, float))
