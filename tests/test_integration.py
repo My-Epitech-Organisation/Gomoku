@@ -5,7 +5,6 @@
 ## Integration tests for the communication system
 ##
 
-import pytest
 import sys
 import os
 from io import StringIO

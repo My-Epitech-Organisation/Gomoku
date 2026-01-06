@@ -6,10 +6,12 @@
 ##
 
 import sys
-from typing import Any, TextIO
+from typing import Any, Optional, TextIO
 
 import constants
+from game import constants as game_constants
 
+from .async_reader import AsyncInputReader
 from .protocol.commands import (
     BoardCommand,
     Command,
@@ -37,6 +39,9 @@ class CommunicationManager:
         self.output_stream = output_stream or sys.stdout
         self.parser = ProtocolParser()
         self.running = False
+        self.async_reader: Optional[AsyncInputReader] = None
+        self.ponder_manager = None  # Set by context if pondering enabled
+        self.use_async = game_constants.PONDER_ENABLED
 
     def send_response(self, response: Response) -> None:
         output = response.to_output()
@@ -99,12 +104,44 @@ class CommunicationManager:
         try:
             x = command.params[constants.PARAM_X]
             y = command.params[constants.PARAM_Y]
+
+            # Check for ponder hit before processing
+            ponder_result = None
+            if self.ponder_manager is not None:
+                ponder_result = self.ponder_manager.on_opponent_move(x, y)
+
             if hasattr(self.context, constants.METHOD_PROCESS_OPPONENT_MOVE):
                 self.context.process_opponent_move(x, y)
-            if hasattr(self.context, constants.METHOD_GET_BEST_MOVE):
+
+            if ponder_result is not None:
+                # Ponder hit - use cached result and warm TT in background (non-blocking)
+                move_x, move_y = ponder_result
+                if hasattr(self.context, "board") and self.context.board is not None:
+                    self.context.board.place_stone(move_x, move_y, self.context.player_stone)
+                    # Start TT warming in background (continues while waiting for next input)
+                    if self.context.ai is not None and game_constants.TIME_BANK_ENABLED:
+                        import threading
+                        board_copy = self.context.board.copy()
+                        player = self.context.player_stone
+
+                        def background_warm():
+                            self.context.ai._warm_tt_background(board_copy, player)
+
+                        threading.Thread(target=background_warm, daemon=True).start()
+            elif hasattr(self.context, constants.METHOD_GET_BEST_MOVE):
                 move_x, move_y = self.context.get_best_move()
-                return MoveResponse(move_x, move_y)
-            return ErrorResponse(constants.CONTEXT_NO_MOVE_GEN)
+            else:
+                return ErrorResponse(constants.CONTEXT_NO_MOVE_GEN)
+
+            # Start pondering for next turn
+            if self.ponder_manager is not None and hasattr(self.context, "board"):
+                self.ponder_manager.start_pondering(
+                    self.context.board,
+                    (move_x, move_y),
+                    self.context.player_stone
+                )
+
+            return MoveResponse(move_x, move_y)
         except Exception as e:
             return ErrorResponse(f"{constants.MOVE_GENERATION_FAILED}: {str(e)}")
 
@@ -133,8 +170,14 @@ class CommunicationManager:
 
     def run(self) -> None:
         self.running = True
+
+        # Initialize async reader if pondering is enabled
+        if self.use_async:
+            self.async_reader = AsyncInputReader(self.input_stream)
+            self.async_reader.start()
+
         while self.running:
-            line = self.read_line()
+            line = self._get_next_line()
             if line is None:
                 break
             try:
@@ -152,3 +195,22 @@ class CommunicationManager:
                 self.send_response(
                     ErrorResponse(f"{constants.UNEXPECTED_ERROR}: {str(e)}")
                 )
+
+        # Cleanup
+        if self.async_reader is not None:
+            self.async_reader.stop()
+
+    def _get_next_line(self) -> Optional[str]:
+        """Get next line, using async reader if enabled."""
+        if self.use_async and self.async_reader is not None:
+            # Poll with timeout to allow pondering to continue
+            while self.running:
+                line = self.async_reader.get_line(
+                    timeout=game_constants.PONDER_POLL_INTERVAL
+                )
+                if line is not None:
+                    return line
+                # No input yet - pondering continues in background
+            return None
+        else:
+            return self.read_line()

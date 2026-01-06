@@ -5,7 +5,6 @@
 ## gomoku_board
 ##
 
-from typing import List
 
 
 class Board:

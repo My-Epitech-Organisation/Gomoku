@@ -5,7 +5,6 @@
 ## Tests for protocol commands
 ##
 
-import pytest
 import sys
 import os
 
