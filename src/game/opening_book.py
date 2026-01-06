@@ -5,7 +5,7 @@
 ## Opening book for pre-computed moves
 ##
 
-from typing import Dict, List, Optional, Tuple, Set, Callable
+from typing import Dict, List, Optional, Tuple, Callable
 
 
 class OpeningBook:

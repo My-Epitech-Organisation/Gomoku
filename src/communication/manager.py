@@ -121,7 +121,6 @@ class CommunicationManager:
                     # Start TT warming in background (continues while waiting for next input)
                     if self.context.ai is not None and game_constants.TIME_BANK_ENABLED:
                         import threading
-                        import time
                         board_copy = self.context.board.copy()
                         player = self.context.player_stone
 

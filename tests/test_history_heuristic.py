@@ -5,7 +5,6 @@
 ## Tests for History Heuristic
 ##
 
-import pytest
 import sys
 import os
 

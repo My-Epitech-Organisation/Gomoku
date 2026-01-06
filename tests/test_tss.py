@@ -5,7 +5,6 @@
 ## Tests for Threat Space Search (TSS) - Victory by Continuous Threats
 ##
 
-import pytest
 import sys
 import os
 

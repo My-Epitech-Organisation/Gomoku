@@ -5,7 +5,6 @@
 ## Tests for Search Optimizations (PVS, LMR, Aspiration Windows)
 ##
 
-import pytest
 import sys
 import os
 import time

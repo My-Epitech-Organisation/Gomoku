@@ -5,7 +5,6 @@
 ## Tests for Quiescence Search
 ##
 
-import pytest
 import sys
 import os
 

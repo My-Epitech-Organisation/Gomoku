@@ -5,7 +5,6 @@
 ## Tests for Opening Book
 ##
 
-import pytest
 import sys
 import os
 import time

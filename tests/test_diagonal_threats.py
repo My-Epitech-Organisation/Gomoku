@@ -5,7 +5,6 @@
 ## Tests for diagonal threat detection - fixes for Game 2 loss
 ##
 
-import pytest
 import sys
 import os
 

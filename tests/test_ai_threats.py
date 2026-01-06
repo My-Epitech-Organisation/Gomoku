@@ -5,7 +5,6 @@
 ## Tests for AI threat detection (double-three, four-three, double-four)
 ##
 
-import pytest
 import sys
 import os
 

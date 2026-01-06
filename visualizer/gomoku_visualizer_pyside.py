@@ -7,20 +7,17 @@
 
 import sys
 import os
-import time
 import subprocess
 from typing import List, Tuple, Optional
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
-    QLabel, QPushButton, QSlider, QFrame, QSplitter, QTextEdit,
-    QGroupBox, QProgressBar, QStatusBar, QFormLayout,
-    QSpinBox, QLineEdit
+    QLabel, QPushButton, QSlider, QFrame, QSplitter, QGroupBox
 )
 from PySide6.QtCore import (
-    Qt, QTimer, QThread, Signal, QRectF, QPointF
+    Qt, QTimer, Signal, QPointF
 )
 from PySide6.QtGui import (
-    QPainter, QPen, QBrush, QColor, QFont, QPixmap, QIcon
+    QPainter, QPen, QBrush, QColor, QFont, QIcon
 )
 
 from gomoku_parser import ReplayParser
@@ -453,7 +450,7 @@ class GomokuVisualizer(QMainWindow):
 
             cmd = [liskvork_path]
 
-            self.status_bar.showMessage(f"Launching liskvork...")
+            self.status_bar.showMessage("Launching liskvork...")
 
             project_root = os.path.join(os.path.dirname(__file__), "..")
             with open(os.devnull, 'w') as devnull:

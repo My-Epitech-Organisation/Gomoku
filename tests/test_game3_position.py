@@ -5,7 +5,6 @@
 ## Tests for Game 3 critical positions - open three and open four blocking
 ##
 
-import pytest
 import sys
 import os
 

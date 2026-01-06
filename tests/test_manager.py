@@ -5,7 +5,6 @@
 ## Tests for communication manager
 ##
 
-import pytest
 import sys
 import os
 from io import StringIO

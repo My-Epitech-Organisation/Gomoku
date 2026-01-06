@@ -5,7 +5,6 @@
 ## Tests for Split Three Detection and Blocking
 ##
 
-import pytest
 import sys
 import os
 
