@@ -49,11 +49,12 @@ class MinMaxAI:
                 logger.info(f"Opening book move: {book_move}")
                 return book_move
 
-        # Ultra-fast critical check (< 1ms) - guarantees response for win/block
+        # Ultra-fast critical check (< 1ms) - detects win/block moves
+        # Don't return immediately - use time banking to warm TT
         critical_move = self._check_immediate_critical(board, player)
         if critical_move is not None:
             logger.info(f"Critical move (win/block5): {critical_move}")
-            return critical_move
+            # Will be handled via time banking below
 
         # Phase 0: Global threat scan - find critical opponent threats
         board_threats = self._scan_board_threats(board, opponent)
@@ -195,8 +196,8 @@ class MinMaxAI:
             if vct_move is not None:
                 logger.info(f"VCT found: {vct_move}")
 
-        # Determine if we have a decided move (prioritize force_block)
-        decided_move = force_block_move or immediate_move or vct_move
+        # Determine if we have a decided move (prioritize: critical > force_block > immediate > vct)
+        decided_move = critical_move or force_block_move or immediate_move or vct_move
 
         # Phase 3: Time Banking on ALL decided moves, or Full Search
         result = None
@@ -227,8 +228,13 @@ class MinMaxAI:
         start_time: float
     ) -> Tuple[int, int]:
         """
-        Return decided move at deadline, using remaining time to warm TT.
-        This pre-computes positions for likely future moves.
+        Return decided move at deadline, using remaining time productively.
+
+        Two phases:
+        1. TT Warming (~60% of time): Deep search on predicted opponent responses
+        2. Counter-attack Search (~35% of time): Look for better offensive moves
+
+        This ensures we use the full 4.5s even when we found a fast move.
         """
         logger = get_logger()
         elapsed = time.time() - start_time
@@ -244,31 +250,77 @@ class MinMaxAI:
         future_board = board.copy()
         future_board.place_stone(decided_move[0], decided_move[1], player)
 
-        # Predict opponent responses and search them to warm TT
+        # Predict opponent responses for TT warming
         opponent = 3 - player
-        predicted_responses = self._get_top_opponent_moves(future_board, opponent, count=3)
+        predicted_responses = self._get_top_opponent_moves(
+            future_board, opponent, count=constants.TT_WARMUP_POSITIONS
+        )
 
-        def warm_tt_thread():
-            """Background: shallow search on predicted positions."""
+        # Storage for potential better move found during counter-attack search
+        better_move = [None]
+
+        def productive_thread():
+            """Use time for TT warming AND counter-attack search."""
+            nonlocal better_move
+
+            # Phase 1: TT Warming (~60% of remaining time)
+            warm_budget = remaining * 0.6
+            warm_start = time.time()
+
             for pred_move in predicted_responses:
-                if self.stop_search:
+                if self.stop_search or (time.time() - warm_start) > warm_budget:
                     break
+
                 pred_board = future_board.copy()
                 pred_board.place_stone(pred_move[0], pred_move[1], opponent)
-                # Shallow search to populate TT
-                self._search_at_depth(pred_board, player, depth=constants.TT_WARMUP_DEPTH)
 
-        thread = threading.Thread(target=warm_tt_thread, daemon=True)
+                # Iterative deepening on each position for deeper TT entries
+                for d in range(2, constants.TT_WARMUP_DEPTH + 1, 2):
+                    if self.stop_search or (time.time() - warm_start) > warm_budget:
+                        break
+                    self._search_at_depth(pred_board, player, depth=d)
+
+            # Phase 2: Counter-attack search (~35% of remaining time)
+            # Skip if stopped or if decided_move is already a winning move
+            if self.stop_search:
+                return
+
+            # Only search for counter-attack if we're defending (not winning)
+            # This avoids wasting time when we already have a winning move
+            attack_budget = remaining * 0.35
+            attack_start = time.time()
+
+            # Quick VCT search to see if we have a winning sequence
+            try:
+                vct = self._threat_space_search(
+                    board, player, max_depth=10, time_limit=attack_budget
+                )
+                if vct and vct != decided_move:
+                    # Found a potentially better offensive move
+                    better_move[0] = vct
+                    logger.info(f"Counter-attack found: {vct} (was defending: {decided_move})")
+            except Exception:
+                # Ignore errors in counter-attack search
+                pass
+
+        # Spawn thread and reset stop flag
+        self.stop_search = False
+        thread = threading.Thread(target=productive_thread, daemon=True)
         thread.start()
 
-        # Wait until deadline (with safety margin for response latency)
-        time.sleep(max(0, remaining - 0.15))  # 150ms safety margin
+        # Wait until deadline (with 150ms safety margin)
+        sleep_time = max(0, remaining - 0.15)
+        time.sleep(sleep_time)
+
+        # Signal stop and wait for cleanup
         self.stop_search = True
         thread.join(timeout=0.05)
 
-        logger.debug(f"Time banked: warmed TT for {len(predicted_responses)} predictions")
+        # Return better move if found, otherwise decided move
+        final_move = better_move[0] if better_move[0] else decided_move
+        logger.debug(f"Time banked: returning {final_move} after {time.time() - start_time:.2f}s")
 
-        return decided_move
+        return final_move
 
     def _quick_tt_warm(
         self,
