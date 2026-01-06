@@ -584,7 +584,7 @@ class MinMaxAI:
         moves.sort(key=history_sort_key, reverse=True)
 
         for move_index, move in enumerate(moves):
-            if self.stop_search:  # Check for interruption in negamax loop
+            if self.stop_search:
                 break
 
             board.place_stone(move[0], move[1], current_player)
@@ -727,7 +727,6 @@ class MinMaxAI:
         if stand_pat >= beta:
             return beta
 
-        # Update alpha with stand-pat score
         if stand_pat > alpha:
             alpha = stand_pat
 
@@ -739,7 +738,6 @@ class MinMaxAI:
         if stand_pat + constants.QUIESCENCE_DELTA < alpha:
             return alpha
 
-        # Get only tactical moves (fours, open threes, blocks)
         tactical_moves = self._get_quiescence_moves(board, current_player)
 
         if not tactical_moves:
@@ -748,7 +746,7 @@ class MinMaxAI:
         opponent = 3 - current_player
 
         for move in tactical_moves:
-            if self.stop_search:  # Check for interruption in quiescence loop
+            if self.stop_search:
                 break
 
             board.place_stone(move[0], move[1], current_player)
@@ -780,43 +778,36 @@ class MinMaxAI:
         for move in all_moves:
             x, y = move
 
-            # Check if this move wins
             board.place_stone(x, y, player)
             if board.check_win(x, y, player):
                 board.undo_stone(x, y, player)
-                return [move]  # Immediately return winning move
+                return [move]
 
-            # Check our threats
             our_threats = self._count_threats(board, x, y, player)
             board.undo_stone(x, y, player)
 
-            # Creating a four (open or closed) is tactical
             if our_threats["open_fours"] > 0 or our_threats["closed_fours"] > 0:
-                tactical.append((move, 100))  # High priority
+                tactical.append((move, 100))
                 continue
 
-            # Creating an open three is tactical
             if our_threats["open_threes"] > 0:
                 tactical.append((move, 50))
                 continue
 
-            # Check if this blocks opponent's winning move
             board.place_stone(x, y, opponent)
             if board.check_win(x, y, opponent):
                 board.undo_stone(x, y, opponent)
-                tactical.append((move, 200))  # Must block - highest priority
+                tactical.append((move, 200))
                 continue
 
-            # Check if blocks opponent's four or open three
             opp_threats = self._count_threats(board, x, y, opponent)
             board.undo_stone(x, y, opponent)
 
             if opp_threats["open_fours"] > 0 or opp_threats["closed_fours"] > 0:
-                tactical.append((move, 90))  # Block their four
+                tactical.append((move, 90))
             elif opp_threats["open_threes"] > 0:
-                tactical.append((move, 40))  # Block their open three
+                tactical.append((move, 40))
 
-        # Sort by priority and return just the moves (limit to QUIESCENCE_MAX_MOVES)
         tactical.sort(key=lambda x: -x[1])
         return [m[0] for m in tactical[:constants.QUIESCENCE_MAX_MOVES]]
 
@@ -826,11 +817,8 @@ class MinMaxAI:
         Lightweight check - only examines our threats since stone is already placed.
         """
         x, y = move
-
-        # Check if our move creates significant threats (stone already on board)
         threats = self._count_threats(board, x, y, player)
 
-        # Don't reduce if creates four or open three
         if threats["open_fours"] > 0 or threats["closed_fours"] > 0:
             return True
         if threats["open_threes"] > 0:
@@ -1002,51 +990,41 @@ class MinMaxAI:
         x, y = move
         opponent = 3 - player
 
-        # === 1. Check if move wins ===
         board.place_stone(x, y, player)
         if board.check_win(x, y, player):
             board.undo_stone(x, y, player)
             return constants.MOVE_WIN
 
-        # === 2. Count our threats ===
         our_threats = self._count_threats(board, x, y, player)
 
         total_fours = our_threats["open_fours"] + our_threats["closed_fours"]
 
-        # Double-four = forced win
         if total_fours >= 2:
             board.undo_stone(x, y, player)
             return constants.MOVE_DOUBLE_FOUR
 
-        # Four-three = forced win
         if total_fours >= 1 and our_threats["open_threes"] >= 1:
             board.undo_stone(x, y, player)
             return constants.MOVE_FOUR_THREE
 
-        # Open four
         if our_threats["open_fours"] >= 1:
             board.undo_stone(x, y, player)
             return constants.MOVE_OPEN_FOUR
 
-        # Double-three = becomes four-three next move
         if our_threats["open_threes"] >= 2:
             board.undo_stone(x, y, player)
             return constants.MOVE_FORK
 
         board.undo_stone(x, y, player)
 
-        # === 3. Check opponent threats to block (PRIORITY) ===
         board.place_stone(x, y, opponent)
         blocks_win = board.check_win(x, y, opponent)
         if blocks_win:
             board.undo_stone(x, y, opponent)
-            # This move blocks opponent win - MANDATORY
-            # But check if we have a counter-attack
             board.place_stone(x, y, player)
             opp_still_wins = self._has_winning_move(board, opponent)
             board.undo_stone(x, y, player)
             if opp_still_wins:
-                # Even after blocking, opponent wins - lost position
                 return constants.MOVE_BLOCK_WIN // 2
             return constants.MOVE_BLOCK_WIN
 
@@ -1055,41 +1033,32 @@ class MinMaxAI:
 
         opp_fours = opp_threats["open_fours"] + opp_threats["closed_fours"]
 
-        # Block opponent double-four
         if opp_fours >= 2:
             return constants.MOVE_BLOCK_DOUBLE_FOUR
 
-        # Block opponent four-three
         if opp_fours >= 1 and opp_threats["open_threes"] >= 1:
             return constants.MOVE_BLOCK_FOUR_THREE
 
-        # Block open four
         if opp_threats["open_fours"] >= 1:
             return constants.MOVE_BLOCK_OPEN_FOUR
 
-        # Block pre-open-four (.XXX. pattern that becomes open four)
         if opp_threats.get("pre_open_fours", 0) >= 1:
             return constants.MOVE_BLOCK_PRE_OPEN_FOUR
 
-        # Block split three (XX.X, X.XX patterns) - critical to prevent open four
         if opp_threats["split_threes"] >= 1:
             return constants.MOVE_BLOCK_SPLIT_THREE
 
-        # Block open three
         if opp_threats["open_threes"] >= 1:
             return constants.MOVE_BLOCK_OPEN_THREE
 
-        # Block building two (.XX. - proactive defense)
         if opp_threats.get("building_twos", 0) >= 1:
             return constants.MOVE_BLOCK_BUILDING_TWO
 
-        # === 4. Evaluate move potential ===
         board.place_stone(x, y, player)
         our_threats_final = self._count_threats(board, x, y, player)
         score = self._evaluate_position(board, x, y, player)
         board.undo_stone(x, y, player)
 
-        # Bonus for creating our own split three
         if our_threats_final["split_threes"] >= 1:
             return constants.MOVE_SPLIT_THREE
 
@@ -1217,7 +1186,6 @@ class MinMaxAI:
         best_score = -1
 
         for ox, oy in our_stones:
-            # Check all adjacent positions
             for dx in range(-2, 3):
                 for dy in range(-2, 3):
                     if dx == 0 and dy == 0:
@@ -1225,35 +1193,24 @@ class MinMaxAI:
                     nx, ny = ox + dx, oy + dy
                     if (0 <= nx < board.width and 0 <= ny < board.height
                             and board.grid[ny][nx] == 0):
-                        # Score based on:
-                        # - Distance 1 from our stone = +10
-                        # - Distance 2 from our stone = +5
-                        # - Proximity to opponent stones = +3 per nearby
                         score = 0
-
-                        # Adjacency to our stones
                         dist = max(abs(dx), abs(dy))
                         if dist == 1:
-                            score += 10  # Directly adjacent
+                            score += 10
                         else:
-                            score += 5   # 2 squares away
+                            score += 5
 
-                        # Proximity to opponent stones
                         for ex, ey in opp_stones:
                             opp_dist = max(abs(nx - ex), abs(ny - ey))
                             if opp_dist <= 2:
-                                score += (3 - opp_dist) * 3  # Closer = better
+                                score += (3 - opp_dist) * 3
 
-                        # Bonus for being between our stone and opponent
                         for ex, ey in opp_stones:
-                            # Check if (nx, ny) is on the line between our stone and opponent
                             if ox != ex or oy != ey:
-                                # Direction from our stone to opponent
                                 dir_x = 1 if ex > ox else (-1 if ex < ox else 0)
                                 dir_y = 1 if ey > oy else (-1 if ey < oy else 0)
-                                # Check if move is in this direction
                                 if dx == dir_x and dy == dir_y:
-                                    score += 8  # Between = strategic
+                                    score += 8
 
                         if score > best_score:
                             best_score = score
@@ -1321,8 +1278,6 @@ class MinMaxAI:
 
         return threats
 
-    # ==================== GLOBAL THREAT SCANNING ====================
-
     def _scan_board_threats(self, board, opponent: int) -> dict:
         """
         Scan entire board for opponent threat patterns.
@@ -1335,13 +1290,9 @@ class MinMaxAI:
             "building_twos": [], # Two stones that can become three (.XX.)
         }
 
-        opp_str = str(opponent)
-
-        # Scan all 4 directions
         for dx, dy in constants.DIRECTIONS:
             direction_name = self._direction_name(dx, dy)
 
-            # Scan rows/columns/diagonals
             if dx == 1 and dy == 0:  # Horizontal
                 for y in range(board.height):
                     self._scan_line(
@@ -1479,8 +1430,6 @@ class MinMaxAI:
             return "diagonal_\\"
         else:
             return "diagonal_/"
-
-    # ==================== THREAT SPACE SEARCH (TSS) ====================
 
     def _get_threat_moves(self, board, player: int) -> List[Tuple[int, int]]:
         """Return moves that create threats (fours, threes)."""
