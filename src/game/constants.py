@@ -47,6 +47,19 @@ LMR_FULL_MOVES = 3          # First N moves at full depth
 LMR_MIN_DEPTH = 3           # Minimum depth to apply LMR
 LMR_REDUCTION = 2           # Depth reduction amount
 
+# Quiescence Search - extend search on tactical moves at depth 0
+QUIESCENCE_MAX_DEPTH = 6    # Maximum plies to search in quiescence
+QUIESCENCE_DELTA = 50_000   # Delta pruning margin
+
+# History Heuristic - track successful moves across depths
+HISTORY_MAX_VALUE = 10_000  # Cap history scores to prevent overflow
+HISTORY_DECAY_FACTOR = 0.9  # Multiply all history by this each age
+HISTORY_BONUS_DEPTH = True  # Scale bonus by depth (deeper = more valuable)
+
+# Opening Book - pre-computed moves for early game
+OPENING_BOOK_MAX_MOVES = 6  # Use book for first N moves
+OPENING_BOOK_ENABLED = True # Toggle opening book
+
 DOUBLE_THREE_BONUS = 20_000
 DOUBLE_FOUR_BONUS = 50_000
 CENTER_CONTROL = 10

@@ -11,6 +11,7 @@ import time
 from typing import List, Optional, Tuple
 
 from . import constants
+from .opening_book import get_opening_book
 from utils.logger import get_logger
 
 
@@ -28,15 +29,25 @@ class MinMaxAI:
         self.nodes = 0
         self.transposition_table = {}
         self.killer_moves = {}
+        self.history_table = {1: {}, 2: {}}  # player -> {(x,y): score}
         self.age = 0
 
     def get_best_move(self, board, player: int) -> Optional[Tuple[int, int]]:
         self.stop_search = False
         self.nodes = 0
         self.age += 1
+        self._decay_history()  # Decay history scores each search
         start_time = time.time()
         logger = get_logger()
         opponent = 3 - player
+
+        # Check opening book first (for early game moves)
+        if board.move_count <= constants.OPENING_BOOK_MAX_MOVES:
+            opening_book = get_opening_book(board.width)
+            book_move = opening_book.lookup(board)
+            if book_move is not None:
+                logger.info(f"Opening book move: {book_move}")
+                return book_move
 
         # Phase 0: Global threat scan - find critical opponent threats
         board_threats = self._scan_board_threats(board, opponent)
@@ -463,8 +474,11 @@ class MinMaxAI:
                 elif entry["flag"] == constants.UPPER and entry["value"] <= alpha:
                     return entry["value"]
 
-        if depth == 0 or board.is_full():
+        if board.is_full():
             return self.evaluate(board) * (1 if current_player == 1 else -1)
+
+        if depth == 0:
+            return self.quiescence_search(board, alpha, beta, current_player)
 
         max_eval = -constants.INFINITY
         best_move = None
@@ -472,7 +486,7 @@ class MinMaxAI:
         opponent = 3 - current_player
         original_alpha = alpha
 
-        # Move ordering: TT best move first, then killer moves
+        # Move ordering: TT best move first, then killer moves, then by history
         if tt_best_move and tt_best_move in moves:
             moves.remove(tt_best_move)
             moves.insert(0, tt_best_move)
@@ -482,6 +496,17 @@ class MinMaxAI:
             if killer in moves and killer != tt_best_move:
                 moves.remove(killer)
                 moves.insert(1 if tt_best_move else 0, killer)
+
+        # Sort remaining moves by history heuristic
+        # Keep TT and killer moves at front by giving them high scores
+        def history_sort_key(m):
+            if m == tt_best_move:
+                return constants.INFINITY
+            if m in killers:
+                return constants.INFINITY - 1
+            return self._get_history_score(m, current_player)
+
+        moves.sort(key=history_sort_key, reverse=True)
 
         for move_index, move in enumerate(moves):
             board.place_stone(move[0], move[1], current_player)
@@ -521,6 +546,7 @@ class MinMaxAI:
             alpha = max(alpha, eval)
             if alpha >= beta:
                 self._add_killer_move(depth, move)
+                self._update_history(move, current_player, depth)
                 break
 
         if max_eval <= original_alpha:
@@ -548,6 +574,170 @@ class MinMaxAI:
             killers.insert(0, move)
             if len(killers) > 2:
                 killers.pop()
+
+    def _update_history(self, move: Tuple[int, int], player: int, depth: int) -> None:
+        """
+        Update history score for a move that caused a beta cutoff.
+
+        Args:
+            move: The move (x, y)
+            player: Player who made the move
+            depth: Search depth where cutoff occurred (deeper = more valuable)
+        """
+        # Bonus scales with depth squared (deeper cutoffs are more significant)
+        if constants.HISTORY_BONUS_DEPTH:
+            bonus = depth * depth
+        else:
+            bonus = 1
+
+        if move not in self.history_table[player]:
+            self.history_table[player][move] = 0
+
+        self.history_table[player][move] += bonus
+
+        # Cap to prevent overflow
+        if self.history_table[player][move] > constants.HISTORY_MAX_VALUE:
+            self.history_table[player][move] = constants.HISTORY_MAX_VALUE
+
+    def _decay_history(self) -> None:
+        """
+        Decay all history scores to prevent stale data from dominating.
+        Called at the start of each new search (when age increments).
+        """
+        for player in [1, 2]:
+            for move in list(self.history_table[player].keys()):
+                self.history_table[player][move] = int(
+                    self.history_table[player][move] * constants.HISTORY_DECAY_FACTOR
+                )
+            # Remove entries that decayed to 0
+            self.history_table[player] = {
+                m: s for m, s in self.history_table[player].items() if s > 0
+            }
+
+    def _get_history_score(self, move: Tuple[int, int], player: int) -> int:
+        """Get history score for a move."""
+        return self.history_table[player].get(move, 0)
+
+    def quiescence_search(
+        self, board, alpha: int, beta: int, current_player: int, qs_depth: int = 0
+    ) -> int:
+        """
+        Quiescence search - continue searching only tactical moves at leaf nodes.
+
+        Extends search at depth=0 to resolve tactical sequences and avoid
+        the horizon effect where a critical threat is missed just beyond
+        the search depth.
+
+        Args:
+            board: Current board state
+            alpha: Alpha bound
+            beta: Beta bound
+            current_player: Player to move (1 or 2)
+            qs_depth: Current quiescence depth (starts at 0)
+
+        Returns:
+            Evaluation score for the position
+        """
+        if self.stop_search:
+            return 0
+        self.nodes += 1
+
+        # Stand-pat evaluation: the score if we choose not to make any tactical move
+        stand_pat = self.evaluate(board) * (1 if current_player == 1 else -1)
+
+        # Beta cutoff: position is already too good for opponent
+        if stand_pat >= beta:
+            return beta
+
+        # Update alpha with stand-pat score
+        if stand_pat > alpha:
+            alpha = stand_pat
+
+        # Depth limit to prevent explosion
+        if qs_depth >= constants.QUIESCENCE_MAX_DEPTH:
+            return alpha
+
+        # Delta pruning: if even the best tactical outcome can't improve alpha
+        if stand_pat + constants.QUIESCENCE_DELTA < alpha:
+            return alpha
+
+        # Get only tactical moves (fours, open threes, blocks)
+        tactical_moves = self._get_quiescence_moves(board, current_player)
+
+        if not tactical_moves:
+            return stand_pat
+
+        opponent = 3 - current_player
+
+        for move in tactical_moves:
+            board.place_stone(move[0], move[1], current_player)
+
+            score = -self.quiescence_search(board, -beta, -alpha, opponent, qs_depth + 1)
+
+            board.undo_stone(move[0], move[1], current_player)
+
+            if score >= beta:
+                return beta  # Beta cutoff
+            if score > alpha:
+                alpha = score
+
+        return alpha
+
+    def _get_quiescence_moves(
+        self, board, player: int
+    ) -> List[Tuple[int, int]]:
+        """
+        Get moves to explore in quiescence search.
+
+        Only returns tactical moves: winning moves, fours, open threes,
+        and critical blocks. Limited to top 8 moves by priority.
+        """
+        tactical = []
+        opponent = 3 - player
+        all_moves = board.get_valid_moves()
+
+        for move in all_moves:
+            x, y = move
+
+            # Check if this move wins
+            board.place_stone(x, y, player)
+            if board.check_win(x, y, player):
+                board.undo_stone(x, y, player)
+                return [move]  # Immediately return winning move
+
+            # Check our threats
+            our_threats = self._count_threats(board, x, y, player)
+            board.undo_stone(x, y, player)
+
+            # Creating a four (open or closed) is tactical
+            if our_threats["open_fours"] > 0 or our_threats["closed_fours"] > 0:
+                tactical.append((move, 100))  # High priority
+                continue
+
+            # Creating an open three is tactical
+            if our_threats["open_threes"] > 0:
+                tactical.append((move, 50))
+                continue
+
+            # Check if this blocks opponent's winning move
+            board.place_stone(x, y, opponent)
+            if board.check_win(x, y, opponent):
+                board.undo_stone(x, y, opponent)
+                tactical.append((move, 200))  # Must block - highest priority
+                continue
+
+            # Check if blocks opponent's four or open three
+            opp_threats = self._count_threats(board, x, y, opponent)
+            board.undo_stone(x, y, opponent)
+
+            if opp_threats["open_fours"] > 0 or opp_threats["closed_fours"] > 0:
+                tactical.append((move, 90))  # Block their four
+            elif opp_threats["open_threes"] > 0:
+                tactical.append((move, 40))  # Block their open three
+
+        # Sort by priority and return just the moves (limit to top 8)
+        tactical.sort(key=lambda x: -x[1])
+        return [m[0] for m in tactical[:8]]
 
     def _is_tactical_move(self, board, move: Tuple[int, int], player: int) -> bool:
         """
