@@ -73,7 +73,13 @@ class MinMaxAI:
         elapsed = time.time() - start_time
         remaining = constants.RESPONSE_DEADLINE - elapsed
 
+        print(
+            f"[AI] Time bank: elapsed={elapsed:.3f}s, remaining={remaining:.3f}s",
+            file=sys.stderr,
+        )
+
         if remaining < constants.MIN_THINKING_TIME:
+            print(f"[AI] Skipping time bank (remaining < {constants.MIN_THINKING_TIME}s)", file=sys.stderr)
             return decided_move
 
         # Create board with our decided move played
@@ -141,15 +147,33 @@ class MinMaxAI:
         player: int,
         start_time: float
     ) -> Optional[Tuple[int, int]]:
-        """Full iterative deepening search with time control."""
+        """Full iterative deepening search with time control and aspiration windows."""
         best_move = [None]
 
         def search_thread():
             current_depth = 1
+            previous_value = 0  # Initial guess for aspiration windows
+
             while not self.stop_search:
-                move, value = self._search_at_depth(board, player, current_depth)
+                # Use aspiration windows for depth >= ASPIRATION_MIN_DEPTH
+                if current_depth >= constants.ASPIRATION_MIN_DEPTH:
+                    alpha = previous_value - constants.ASPIRATION_DELTA
+                    beta = previous_value + constants.ASPIRATION_DELTA
+
+                    move, value = self._search_at_depth_with_window(
+                        board, player, current_depth, alpha, beta
+                    )
+
+                    # Re-search with full window if outside aspiration bounds
+                    if value <= alpha or value >= beta:
+                        move, value = self._search_at_depth(board, player, current_depth)
+                else:
+                    move, value = self._search_at_depth(board, player, current_depth)
+
                 if move is not None:
                     best_move[0] = move
+                    previous_value = value
+
                 current_depth += 1
 
             elapsed = time.time() - start_time
@@ -281,9 +305,35 @@ class MinMaxAI:
                 moves.remove(killer)
                 moves.insert(1 if tt_best_move else 0, killer)
 
-        for move in moves:
+        for move_index, move in enumerate(moves):
             board.place_stone(move[0], move[1], current_player)
-            eval = -self.negamax(board, depth - 1, -beta, -alpha, opponent)
+
+            # Determine if LMR applies to this move
+            use_lmr = (
+                move_index >= constants.LMR_FULL_MOVES and
+                depth >= constants.LMR_MIN_DEPTH and
+                not self._is_tactical_move(board, move, current_player)
+            )
+
+            if move_index == 0:
+                # PV move: full window, full depth
+                eval = -self.negamax(board, depth - 1, -beta, -alpha, opponent)
+            elif use_lmr:
+                # LMR: reduced depth, null window
+                reduced_depth = max(1, depth - 1 - constants.LMR_REDUCTION)
+                eval = -self.negamax(board, reduced_depth, -alpha - 1, -alpha, opponent)
+
+                # Re-search with full depth if improved
+                if eval > alpha:
+                    eval = -self.negamax(board, depth - 1, -beta, -alpha, opponent)
+            else:
+                # Non-PV without LMR: null window, full depth (PVS)
+                eval = -self.negamax(board, depth - 1, -alpha - 1, -alpha, opponent)
+
+                # Re-search with full window if improved
+                if alpha < eval < beta:
+                    eval = -self.negamax(board, depth - 1, -beta, -alpha, opponent)
+
             board.undo_stone(move[0], move[1], current_player)
 
             if eval > max_eval:
@@ -320,6 +370,34 @@ class MinMaxAI:
             killers.insert(0, move)
             if len(killers) > 2:
                 killers.pop()
+
+    def _is_tactical_move(self, board, move: Tuple[int, int], player: int) -> bool:
+        """
+        Check if move is tactical (should not be reduced by LMR).
+        Lightweight check - only examines our threats since stone is already placed.
+        """
+        x, y = move
+
+        # Check if our move creates significant threats (stone already on board)
+        threats = self._count_threats(board, x, y, player)
+
+        # Don't reduce if creates four or open three
+        if threats["open_fours"] > 0 or threats["closed_fours"] > 0:
+            return True
+        if threats["open_threes"] > 0:
+            return True
+
+        # For blocking detection, use a lightweight pattern check
+        # without expensive board manipulation
+        opponent = 3 - player
+        opp_str = str(opponent)
+        for dx, dy in constants.DIRECTIONS:
+            line = self._get_line(board, x, y, dx, dy)
+            # If line contains 3+ opponent stones nearby, likely blocking a threat
+            if line.count(opp_str) >= 3:
+                return True
+
+        return False
 
     def evaluate(self, board) -> int:
         # If cache is empty and board has stones, do full evaluation
@@ -437,6 +515,37 @@ class MinMaxAI:
             if value > best_value:
                 best_value = value
                 best_move = move
+
+        return best_move, best_value
+
+    def _search_at_depth_with_window(
+        self, board, player: int, depth: int, alpha: int, beta: int
+    ) -> Tuple[Optional[Tuple[int, int]], int]:
+        """Search at fixed depth with custom alpha-beta window (for aspiration windows)."""
+        board_copy = board.copy()
+        opponent = 3 - player
+        best_move = None
+        best_value = -constants.INFINITY
+
+        moves = board_copy.get_valid_moves()
+        moves = sorted(
+            moves, key=lambda m: -self._move_heuristic(board_copy, m, player)
+        )[:12]
+
+        for move in moves:
+            board_copy.place_stone(move[0], move[1], player)
+            value = -self.negamax(
+                board_copy, depth - 1, -beta, -alpha, opponent
+            )
+            board_copy.undo_stone(move[0], move[1], player)
+
+            if value > best_value:
+                best_value = value
+                best_move = move
+
+            alpha = max(alpha, value)
+            if alpha >= beta:
+                break
 
         return best_move, best_value
 

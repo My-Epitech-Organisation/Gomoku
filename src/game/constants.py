@@ -38,6 +38,15 @@ PONDER_PREDICTIONS = 5    # Top N opponent moves to explore
 PONDER_MAX_DEPTH = 6      # Max depth during pondering
 PONDER_POLL_INTERVAL = 0.1  # Poll interval in seconds
 
+# Aspiration Windows - narrow initial search window
+ASPIRATION_DELTA = 50       # Initial window size around previous score
+ASPIRATION_MIN_DEPTH = 4    # Start using aspiration at depth 4
+
+# LMR - Late Move Reductions
+LMR_FULL_MOVES = 3          # First N moves at full depth
+LMR_MIN_DEPTH = 3           # Minimum depth to apply LMR
+LMR_REDUCTION = 2           # Depth reduction amount
+
 DOUBLE_THREE_BONUS = 20_000
 DOUBLE_FOUR_BONUS = 50_000
 CENTER_CONTROL = 10
