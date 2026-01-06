@@ -66,8 +66,8 @@ class TestFight3Sequence:
             x, y, player = self.moves[i]
             self.board.place_stone(x, y, player)
 
-    def test_visualize_final_position(self):
-        """Visualize the final losing position."""
+    def debug_visualize_final_position(self):
+        """Visualize the final losing position (debug utility, not a test)."""
         self._play_moves_until(len(self.moves))
         print("\n=== FINAL POSITION (Player 1 wins) ===")
         print("Winning diagonal: (5,5)→(6,4)→(7,3)→(8,2)→(9,1)")
@@ -100,22 +100,10 @@ class TestFight3Sequence:
 
     def test_move24_must_block_four(self):
         """
-        After move 23 (8,2,1), Player 1 has:
-        - (5,5), (6,4), (7,3), (8,2) = 4 in a row DIAGONAL!
+        After move 23 (8,2,1), Player 1 has an open four on the diagonal:
+        (5,5)→(6,4)→(7,3)→(8,2), extendable to five at (9,1) or (4,6).
 
-        Move 24 is Player 2's turn. MUST block at (9,1) or (4,6).
-        But Player 2 played (4,6) which doesn't block the winning side.
-
-        Wait - let me check: if (4,6) is on the diagonal extension?
-        Diagonal goes (x+1, y-1): (5,5)→(6,4)→(7,3)→(8,2)→(9,1)
-        So (4,6) is the OTHER end. Should work!
-
-        But Player 1 won at (9,1), so (4,6) didn't block properly...
-        Let me check if (4,6) is correct: (5,5) - going -x,+y → (4,6) YES!
-        So both (4,6) and (9,1) should block.
-
-        The issue might be that Player 2 DID play (4,6) but then P1 played (9,1) to win.
-        That means (4,6) was played but there was already XXXX on board!
+        Move 24: Player 2 must block at one of these endpoints.
         """
         self._play_moves_until(23)  # Up to move 23 (8,2,1)
 
@@ -133,14 +121,8 @@ class TestFight3Sequence:
         assert move in [(9, 1), (4, 6)], \
             f"Move 24: Must block OPEN FOUR at (9,1) or (4,6), got {move}"
 
-    def test_critical_move19_analysis(self):
-        """
-        Move 19 is (5,5,1) - Player 1 starts building diagonal.
-        At this point P1 has: (7,3) and now (5,5)
-
-        After move 18 (5,3,2), it's P1's turn.
-        Let's see what P1 had before (5,5).
-        """
+    def debug_critical_move19_analysis(self):
+        """Debug utility: Analyze board state before Move 19 (5,5,1)."""
         self._play_moves_until(18)  # Up to move 18 (5,3,2)
 
         print("\n=== After Move 18: Before P1 plays (5,5) ===")
@@ -203,8 +185,8 @@ class TestFight3Move06Sequence:
             x, y, player = self.moves[i]
             self.board.place_stone(x, y, player)
 
-    def test_visualize_final_position(self):
-        """Visualize final position to identify winning pattern."""
+    def debug_visualize_final_position(self):
+        """Debug utility: Visualize final position to identify winning pattern."""
         self._play_moves_until(len(self.moves))
         print("\n=== TEST 06 FINAL POSITION (Player 1 wins at 5,8) ===")
         visualize_board(self.board)
@@ -218,7 +200,7 @@ class TestFight3Move06Sequence:
         for x, y, move_num in p1_stones:
             print(f"  Move {move_num}: ({x}, {y})")
 
-    def test_find_winning_pattern(self):
+    def debug_find_winning_pattern(self):
         """Find the exact winning 5-in-a-row pattern."""
         self._play_moves_until(len(self.moves))
 
@@ -254,10 +236,8 @@ class TestReplayAndAnalyze:
         self.board = Board(20, 20)
         self.ai = MinMaxAI()
 
-    def test_replay_fight3_find_divergence(self):
-        """
-        Replay Fight 3 and at each P2 move, check if AI agrees.
-        """
+    def debug_replay_fight3_find_divergence(self):
+        """Debug utility: Replay Fight 3 and find where AI diverges."""
         moves = [
             (6, 3, 1), (4, 3, 2), (7, 2, 1), (5, 4, 2), (7, 3, 1), (3, 2, 2),
             (6, 5, 1), (3, 4, 2), (2, 1, 1), (3, 3, 2), (3, 5, 1), (3, 1, 2),

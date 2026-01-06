@@ -1241,7 +1241,7 @@ class MinMaxAI:
             "closed_fours": 0,
             "open_threes": 0,
             "split_threes": 0,
-            "gapped_threes": 0,   # XX..X, X..XX, X.X.X - 2 gaps
+            "gapped_threes": 0,   # Patterns with 2 empty positions: XX..X, X..XX, X.X.X
             "pre_open_fours": 0,  # .XXX. pattern - becomes open four
             "building_twos": 0,   # .XX. pattern - can become open three
         }
@@ -1288,7 +1288,7 @@ class MinMaxAI:
                         threats["split_threes"] += 1
                         break
 
-            # Check gapped three patterns (XX..X, X..XX, X.X.X) - 2 gaps
+            # Check gapped three patterns - patterns with 2 empty positions
             for pat in patterns["threat"]["gapped_three"]:
                 if pat in line:
                     threats["gapped_threes"] += 1
@@ -1445,11 +1445,12 @@ class MinMaxAI:
                 })
                 idx += 1
 
-        # Check for gapped three patterns (XX..X, X..XX, X.X.X) - 2 gaps
+        # Check gapped three patterns - patterns with 2 empty positions
+        # Gap offsets are 0-based indices into the pattern string
         gapped_patterns = [
-            (f"{opp_str * 2}..{opp_str}", [2, 3]),       # XX..X - gaps at 2,3
-            (f"{opp_str}..{opp_str * 2}", [1, 2]),       # X..XX - gaps at 1,2
-            (f"{opp_str}.{opp_str}.{opp_str}", [1, 3]),  # X.X.X - gaps at 1,3
+            (f"{opp_str * 2}..{opp_str}", [2, 3]),       # XX..X
+            (f"{opp_str}..{opp_str * 2}", [1, 2]),       # X..XX
+            (f"{opp_str}.{opp_str}.{opp_str}", [1, 3]),  # X.X.X
         ]
         for pat, gap_offsets in gapped_patterns:
             idx = 0
