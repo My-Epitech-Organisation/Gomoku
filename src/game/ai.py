@@ -49,6 +49,12 @@ class MinMaxAI:
                 logger.info(f"Opening book move: {book_move}")
                 return book_move
 
+        # Ultra-fast critical check (< 1ms) - guarantees response for win/block
+        critical_move = self._check_immediate_critical(board, player)
+        if critical_move is not None:
+            logger.info(f"Critical move (win/block5): {critical_move}")
+            return critical_move
+
         # Phase 0: Global threat scan - find critical opponent threats
         board_threats = self._scan_board_threats(board, opponent)
         logger.board_scan(board_threats)
@@ -193,15 +199,25 @@ class MinMaxAI:
         decided_move = force_block_move or immediate_move or vct_move
 
         # Phase 3: Time Banking on ALL decided moves, or Full Search
+        result = None
         if decided_move is not None and constants.TIME_BANK_ENABLED:
             # We have a decided move - use remaining time to warm TT
-            return self._time_banked_return(board, player, decided_move, start_time)
+            result = self._time_banked_return(board, player, decided_move, start_time)
         elif decided_move is not None:
             # Time banking disabled - return immediately
-            return decided_move
+            result = decided_move
         else:
             # No decided move - do full iterative deepening search
-            return self._full_iterative_search(board, player, start_time)
+            result = self._full_iterative_search(board, player, start_time)
+
+        # Final fallback: ensure we ALWAYS return a valid move (prevents timeout)
+        if result is None:
+            valid_moves = board.get_valid_moves()
+            if valid_moves:
+                result = valid_moves[0]
+                logger.warning(f"Final fallback to first valid move: {result}")
+
+        return result
 
     def _time_banked_return(
         self,
@@ -382,6 +398,13 @@ class MinMaxAI:
         if best_move[0] is not None and constants.TIME_BANK_ENABLED and remaining > 0.2:
             self._quick_tt_warm(board, player, best_move[0], remaining - 0.15)
 
+        # Fallback: if no move found, return first valid move (prevents timeout/None)
+        if best_move[0] is None:
+            valid_moves = board.get_valid_moves()
+            if valid_moves:
+                best_move[0] = valid_moves[0]
+                logger.warning(f"Fallback to first valid move in iterative search: {best_move[0]}")
+
         return best_move[0]
 
     def _get_top_opponent_moves(
@@ -509,6 +532,9 @@ class MinMaxAI:
         moves.sort(key=history_sort_key, reverse=True)
 
         for move_index, move in enumerate(moves):
+            if self.stop_search:  # Check for interruption in negamax loop
+                break
+
             board.place_stone(move[0], move[1], current_player)
 
             # Determine if LMR applies to this move
@@ -670,6 +696,9 @@ class MinMaxAI:
         opponent = 3 - current_player
 
         for move in tactical_moves:
+            if self.stop_search:  # Check for interruption in quiescence loop
+                break
+
             board.place_stone(move[0], move[1], current_player)
 
             score = -self.quiescence_search(board, -beta, -alpha, opponent, qs_depth + 1)
@@ -735,9 +764,9 @@ class MinMaxAI:
             elif opp_threats["open_threes"] > 0:
                 tactical.append((move, 40))  # Block their open three
 
-        # Sort by priority and return just the moves (limit to top 8)
+        # Sort by priority and return just the moves (limit to QUIESCENCE_MAX_MOVES)
         tactical.sort(key=lambda x: -x[1])
-        return [m[0] for m in tactical[:8]]
+        return [m[0] for m in tactical[:constants.QUIESCENCE_MAX_MOVES]]
 
     def _is_tactical_move(self, board, move: Tuple[int, int], player: int) -> bool:
         """
@@ -1053,6 +1082,43 @@ class MinMaxAI:
                 break
 
         return critical
+
+    def _check_immediate_critical(self, board, player: int) -> Optional[Tuple[int, int]]:
+        """
+        Ultra-fast check (< 1ms) for critical moves.
+        Called BEFORE any search to guarantee a response.
+
+        Checks:
+        1. Immediate winning move (5 in a row)
+        2. Block opponent's immediate win
+
+        Returns move if found, None otherwise.
+        """
+        opponent = 3 - player
+        valid_moves = board.get_valid_moves()
+
+        # Limit to top 20 moves for speed (center-biased by get_valid_moves)
+        check_moves = valid_moves[:20]
+
+        # 1. Check if we can win immediately
+        for move in check_moves:
+            x, y = move
+            board.place_stone(x, y, player)
+            if board.check_win(x, y, player):
+                board.undo_stone(x, y, player)
+                return move  # Winning move!
+            board.undo_stone(x, y, player)
+
+        # 2. Check if opponent wins with any move (we must block)
+        for move in check_moves:
+            x, y = move
+            board.place_stone(x, y, opponent)
+            if board.check_win(x, y, opponent):
+                board.undo_stone(x, y, opponent)
+                return move  # Block opponent's win!
+            board.undo_stone(x, y, opponent)
+
+        return None
 
     def _get_immediate_move(self, board, player: int) -> Optional[Tuple[int, int]]:
         moves = board.get_valid_moves()

@@ -48,7 +48,8 @@ LMR_MIN_DEPTH = 3           # Minimum depth to apply LMR
 LMR_REDUCTION = 2           # Depth reduction amount
 
 # Quiescence Search - extend search on tactical moves at depth 0
-QUIESCENCE_MAX_DEPTH = 6    # Maximum plies to search in quiescence
+QUIESCENCE_MAX_DEPTH = 4    # Maximum plies to search in quiescence (reduced to avoid timeout)
+QUIESCENCE_MAX_MOVES = 6    # Maximum moves to explore per quiescence level
 QUIESCENCE_DELTA = 50_000   # Delta pruning margin
 
 # History Heuristic - track successful moves across depths
