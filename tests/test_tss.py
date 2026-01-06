@@ -273,3 +273,114 @@ class TestIncrementalEvaluation:
 
         # Score should be lower
         assert eval_with_two < eval_with_three
+
+
+class TestSplitThreeBlocking:
+    """Tests for split three and pre-open-four blocking - fixes for lost game."""
+
+    def setup_method(self):
+        self.board = Board(20, 20)
+        self.ai = MinMaxAI()
+
+    def test_block_split_three_horizontal(self):
+        """AI must block XX.X pattern to prevent open four"""
+        # Opponent has XX.X on row 14: (7,14), (8,14), gap, (10,14)
+        self.board.place_stone(7, 14, 2)
+        self.board.place_stone(8, 14, 2)
+        self.board.place_stone(10, 14, 2)
+        # Player stone
+        self.board.place_stone(10, 10, 1)
+
+        move = self.ai.get_best_move(self.board, 1)
+        # Must block at (9, 14) to fill the gap
+        assert move == (9, 14), f"Expected (9,14) to block split three, got {move}"
+
+    def test_block_pre_open_four_horizontal(self):
+        """AI must block .XXX. pattern before it becomes open four"""
+        # Opponent has .XXX. on row 14
+        self.board.place_stone(8, 14, 2)
+        self.board.place_stone(9, 14, 2)
+        self.board.place_stone(10, 14, 2)
+        # Player stone
+        self.board.place_stone(5, 5, 1)
+
+        move = self.ai.get_best_move(self.board, 1)
+        # Must block at (7, 14) or (11, 14) to prevent open four
+        assert move in [(7, 14), (11, 14)], f"Expected block at ends, got {move}"
+
+    def test_losing_game_scenario_move35(self):
+        """Reproduce critical position from lost game (Move 35 scenario)"""
+        # Opponent built line on y=14: (7,14), (8,14), (9,14)
+        # This is a .XXX. pattern that wasn't blocked
+        self.board.place_stone(7, 14, 2)
+        self.board.place_stone(8, 14, 2)
+        self.board.place_stone(9, 14, 2)
+
+        # Add some player stones (simulating mid-game)
+        self.board.place_stone(10, 10, 1)
+        self.board.place_stone(11, 11, 1)
+        self.board.place_stone(9, 9, 1)
+
+        move = self.ai.get_best_move(self.board, 1)
+        # AI must block the pre-open-four
+        assert move in [(6, 14), (10, 14)], \
+            f"AI should block pre-open-four at (6,14) or (10,14), got {move}"
+
+    def test_count_threats_detects_split_three(self):
+        """_count_threats correctly identifies split three patterns"""
+        # XX.X pattern
+        self.board.place_stone(10, 10, 2)
+        self.board.place_stone(11, 10, 2)
+        self.board.place_stone(13, 10, 2)
+
+        # Place opponent stone at gap to test threat count
+        self.board.place_stone(12, 10, 2)
+        threats = self.ai._count_threats(self.board, 12, 10, 2)
+        self.board.undo_stone(12, 10, 2)
+
+        # Should detect it creates a four
+        assert threats["closed_fours"] >= 1 or threats["open_fours"] >= 1
+
+    def test_count_threats_detects_pre_open_four(self):
+        """_count_threats correctly identifies .XXX. pattern"""
+        # .XXX. pattern
+        self.board.place_stone(10, 10, 2)
+        self.board.place_stone(11, 10, 2)
+        self.board.place_stone(12, 10, 2)
+
+        threats = self.ai._count_threats(self.board, 11, 10, 2)
+        # Should detect pre-open-four
+        assert threats["pre_open_fours"] >= 1
+
+    def test_move_heuristic_prioritizes_block(self):
+        """_move_heuristic gives high score to blocking split three"""
+        # XX.X pattern
+        self.board.place_stone(10, 10, 2)
+        self.board.place_stone(11, 10, 2)
+        self.board.place_stone(13, 10, 2)
+
+        # Score for blocking the gap
+        block_score = self.ai._move_heuristic(self.board, (12, 10), 1)
+
+        # Score for random non-critical move
+        random_score = self.ai._move_heuristic(self.board, (5, 5), 1)
+
+        assert block_score > random_score
+        # Should be at least MOVE_BLOCK_SPLIT_THREE level
+        from game import constants
+        assert block_score >= constants.MOVE_BLOCK_SPLIT_THREE
+
+    def test_vertical_split_three_block(self):
+        """AI blocks vertical split three (column threat)"""
+        # XX.X pattern on column 12 - more urgent threat
+        self.board.place_stone(12, 8, 2)
+        self.board.place_stone(12, 9, 2)
+        # gap at (12, 10)
+        self.board.place_stone(12, 11, 2)
+        # Player stone
+        self.board.place_stone(5, 5, 1)
+
+        move = self.ai.get_best_move(self.board, 1)
+        # Should block at gap (12, 10)
+        assert move == (12, 10), \
+            f"Expected to block vertical split three at (12,10), got {move}"

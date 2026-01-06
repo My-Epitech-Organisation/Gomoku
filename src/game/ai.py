@@ -618,13 +618,17 @@ class MinMaxAI:
         if opp_threats["open_fours"] >= 1:
             return constants.MOVE_BLOCK_OPEN_FOUR
 
-        # Block open three
-        if opp_threats["open_threes"] >= 1:
-            return constants.MOVE_BLOCK_OPEN_THREE
+        # Block pre-open-four (.XXX. pattern that becomes open four)
+        if opp_threats.get("pre_open_fours", 0) >= 1:
+            return constants.MOVE_BLOCK_PRE_OPEN_FOUR
 
         # Block split three (XX.X, X.XX patterns) - critical to prevent open four
         if opp_threats["split_threes"] >= 1:
             return constants.MOVE_BLOCK_SPLIT_THREE
+
+        # Block open three
+        if opp_threats["open_threes"] >= 1:
+            return constants.MOVE_BLOCK_OPEN_THREE
 
         # === 4. Evaluate move potential ===
         board.place_stone(x, y, player)
@@ -702,8 +706,12 @@ class MinMaxAI:
             "closed_fours": 0,
             "open_threes": 0,
             "split_threes": 0,
+            "pre_open_fours": 0,  # .XXX. pattern - becomes open four
         }
         patterns = constants.PATTERNS[player]
+        player_str = str(player)
+        # Pre-open-four pattern: .XXX. (3 in row with both ends open)
+        pre_open_four_pattern = f".{player_str * 3}."
 
         for dx, dy in constants.DIRECTIONS:
             line = self._get_line(board, x, y, dx, dy)
@@ -727,6 +735,10 @@ class MinMaxAI:
                     if pat in line:
                         threats["closed_fours"] += 1
                         break
+
+            # Check pre-open-four (.XXX. - will become open four next move)
+            if pre_open_four_pattern in line:
+                threats["pre_open_fours"] += 1
 
             if patterns["threat"]["open_three"] in line:
                 threats["open_threes"] += 1
