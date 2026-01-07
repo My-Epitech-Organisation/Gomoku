@@ -26,6 +26,8 @@ class Board:
         self.eval_cache = {}  # (x, y, player) -> score
         self.eval_totals = {1: 0, 2: 0}
         self.eval_dirty = set()  # positions needing recalculation
+        # Track occupied cells incrementally (avoid full board scan)
+        self.occupied_cells = set()
 
     @classmethod
     def _init_zobrist(cls, width: int, height: int):
@@ -40,6 +42,7 @@ class Board:
             self.grid[y][x] = player
             self.move_count += 1
             self.current_hash ^= self.zobrist_table[y][x][player - 1]
+            self.occupied_cells.add((x, y))
             self._invalidate_eval_region(x, y)
             return True
         return False
@@ -49,12 +52,13 @@ class Board:
             self.grid[y][x] = 0
             self.move_count -= 1
             self.current_hash ^= self.zobrist_table[y][x][player - 1]
+            self.occupied_cells.discard((x, y))
             self._invalidate_eval_region(x, y)
 
     def _invalidate_eval_region(self, x: int, y: int) -> None:
-        """Mark positions in a radius of 4 as dirty for re-evaluation."""
-        for dy in range(-4, 5):
-            for dx in range(-4, 5):
+        """Mark positions in a radius of 2 as dirty for re-evaluation."""
+        for dy in range(-2, 3):
+            for dx in range(-2, 3):
                 nx, ny = x + dx, y + dy
                 if 0 <= nx < self.width and 0 <= ny < self.height:
                     self.eval_dirty.add((nx, ny))
@@ -64,14 +68,8 @@ class Board:
             center_x, center_y = self.width // 2, self.height // 2
             return [(center_x, center_y)]
 
-        occupied = set()
-        for y in range(self.height):
-            for x in range(self.width):
-                if self.grid[y][x] != 0:
-                    occupied.add((x, y))
-
         candidates = set()
-        for x, y in occupied:
+        for x, y in self.occupied_cells:
             for dy in range(-constants.MOVE_RADIUS, constants.MOVE_RADIUS + 1):
                 for dx in range(-constants.MOVE_RADIUS, constants.MOVE_RADIUS + 1):
                     nx, ny = x + dx, y + dy
@@ -125,4 +123,5 @@ class Board:
         new_board.eval_cache = self.eval_cache.copy()
         new_board.eval_totals = self.eval_totals.copy()
         new_board.eval_dirty = self.eval_dirty.copy()
+        new_board.occupied_cells = self.occupied_cells.copy()
         return new_board

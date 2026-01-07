@@ -88,6 +88,9 @@ EXACT = 0
 LOWER = 1
 UPPER = 2
 
+# Transposition Table
+TT_MAX_SIZE = 500_000  # Maximum transposition table entries (LRU eviction)
+
 MOVE_WIN = 1_000_000_000
 MOVE_BLOCK_WIN = 500_000_000
 MOVE_BLOCK_OPEN_FOUR = 200_000_000  # Open four = immediate loss, must block

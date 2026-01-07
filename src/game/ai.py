@@ -7,11 +7,46 @@
 
 import threading
 import time
+from collections import OrderedDict
 from typing import List, Optional, Tuple
 
 from . import constants
 from .opening_book import get_opening_book
 from utils.logger import get_logger
+
+
+class LRUTranspositionTable:
+    """LRU-evicting transposition table with maximum size."""
+
+    def __init__(self, max_size: int = 500_000):
+        self.max_size = max_size
+        self._cache = OrderedDict()
+
+    def __contains__(self, key):
+        return key in self._cache
+
+    def __getitem__(self, key):
+        self._cache.move_to_end(key)
+        return self._cache[key]
+
+    def __setitem__(self, key, value):
+        if key in self._cache:
+            self._cache.move_to_end(key)
+        self._cache[key] = value
+        while len(self._cache) > self.max_size:
+            self._cache.popitem(last=False)
+
+    def get(self, key, default=None):
+        if key in self._cache:
+            self._cache.move_to_end(key)
+            return self._cache[key]
+        return default
+
+    def clear(self):
+        self._cache.clear()
+
+    def __len__(self):
+        return len(self._cache)
 
 
 class MinMaxAI:
@@ -26,9 +61,10 @@ class MinMaxAI:
         self.use_iterative_deepening = use_iterative_deepening
         self.stop_search = False
         self.nodes = 0
-        self.transposition_table = {}
+        self.transposition_table = LRUTranspositionTable(max_size=constants.TT_MAX_SIZE)
         self.killer_moves = {}
         self.history_table = {1: {}, 2: {}}  # player -> {(x,y): score}
+        self.threat_cache = {}  # (board_hash, x, y, player) -> threats dict
         self.age = 0
 
     def get_best_move(self, board, player: int) -> Optional[Tuple[int, int]]:
@@ -36,6 +72,7 @@ class MinMaxAI:
         self.nodes = 0
         self.age += 1
         self._decay_history()  # Decay history scores each search
+        self.threat_cache.clear()  # Clear threat cache for new search
         start_time = time.time()
         logger = get_logger()
         opponent = 3 - player
@@ -783,7 +820,7 @@ class MinMaxAI:
                 board.undo_stone(x, y, player)
                 return [move]
 
-            our_threats = self._count_threats(board, x, y, player)
+            our_threats = self._count_threats_cached(board, x, y, player)
             board.undo_stone(x, y, player)
 
             if our_threats["open_fours"] > 0 or our_threats["closed_fours"] > 0:
@@ -800,7 +837,7 @@ class MinMaxAI:
                 tactical.append((move, 200))
                 continue
 
-            opp_threats = self._count_threats(board, x, y, opponent)
+            opp_threats = self._count_threats_cached(board, x, y, opponent)
             board.undo_stone(x, y, opponent)
 
             if opp_threats["open_fours"] > 0 or opp_threats["closed_fours"] > 0:
@@ -817,7 +854,7 @@ class MinMaxAI:
         Lightweight check - only examines our threats since stone is already placed.
         """
         x, y = move
-        threats = self._count_threats(board, x, y, player)
+        threats = self._count_threats_cached(board, x, y, player)
 
         if threats["open_fours"] > 0 or threats["closed_fours"] > 0:
             return True
@@ -990,12 +1027,16 @@ class MinMaxAI:
         x, y = move
         opponent = 3 - player
 
+        # Phase 1: Evaluate our move (stone placed)
         board.place_stone(x, y, player)
+
         if board.check_win(x, y, player):
             board.undo_stone(x, y, player)
             return constants.MOVE_WIN
 
-        our_threats = self._count_threats(board, x, y, player)
+        # Compute our threats ONCE and cache score
+        our_threats = self._count_threats_cached(board, x, y, player)
+        our_score = self._evaluate_position(board, x, y, player)
 
         total_fours = our_threats["open_fours"] + our_threats["closed_fours"]
 
@@ -1017,8 +1058,10 @@ class MinMaxAI:
 
         board.undo_stone(x, y, player)
 
+        # Phase 2: Evaluate blocking opponent
         board.place_stone(x, y, opponent)
         blocks_win = board.check_win(x, y, opponent)
+
         if blocks_win:
             board.undo_stone(x, y, opponent)
             board.place_stone(x, y, player)
@@ -1028,7 +1071,7 @@ class MinMaxAI:
                 return constants.MOVE_BLOCK_WIN // 2
             return constants.MOVE_BLOCK_WIN
 
-        opp_threats = self._count_threats(board, x, y, opponent)
+        opp_threats = self._count_threats_cached(board, x, y, opponent)
         board.undo_stone(x, y, opponent)
 
         opp_fours = opp_threats["open_fours"] + opp_threats["closed_fours"]
@@ -1054,18 +1097,14 @@ class MinMaxAI:
         if opp_threats.get("building_twos", 0) >= 1:
             return constants.MOVE_BLOCK_BUILDING_TWO
 
-        board.place_stone(x, y, player)
-        our_threats_final = self._count_threats(board, x, y, player)
-        score = self._evaluate_position(board, x, y, player)
-        board.undo_stone(x, y, player)
-
-        if our_threats_final["split_threes"] >= 1:
+        # Phase 3: Return score based on our threats (already computed in Phase 1)
+        if our_threats["split_threes"] >= 1:
             return constants.MOVE_SPLIT_THREE
 
-        if score >= constants.SCORE_OPEN_THREE:
+        if our_score >= constants.SCORE_OPEN_THREE:
             return constants.MOVE_OPEN_THREE
 
-        return score
+        return our_score
 
     def _has_winning_move(self, board, player: int) -> bool:
         """Check if player has a winning move."""
@@ -1089,7 +1128,7 @@ class MinMaxAI:
             if board.check_win(mx, my, player):
                 critical["winning"] += 1
             else:
-                threats = self._count_threats(board, mx, my, player)
+                threats = self._count_threats_cached(board, mx, my, player)
                 total_fours = threats["open_fours"] + threats["closed_fours"]
                 if total_fours >= 2:
                     critical["double_four"] += 1
@@ -1217,6 +1256,20 @@ class MinMaxAI:
                             best_move = (nx, ny)
 
         return best_move
+
+    def _count_threats_cached(self, board, x: int, y: int, player: int) -> dict:
+        """Count threats with caching based on board hash."""
+        cache_key = (board.current_hash, x, y, player)
+        if cache_key in self.threat_cache:
+            return self.threat_cache[cache_key]
+
+        threats = self._count_threats(board, x, y, player)
+
+        # Limit cache size to prevent memory issues
+        if len(self.threat_cache) < 10000:
+            self.threat_cache[cache_key] = threats
+
+        return threats
 
     def _count_threats(self, board, x: int, y: int, player: int) -> dict:
         """Count threats created by a stone at (x, y)."""
@@ -1438,7 +1491,7 @@ class MinMaxAI:
 
         for x, y in valid_moves:
             board.place_stone(x, y, player)
-            threats = self._count_threats(board, x, y, player)
+            threats = self._count_threats_cached(board, x, y, player)
             board.undo_stone(x, y, player)
 
             if (threats["open_fours"] > 0 or
@@ -1457,7 +1510,7 @@ class MinMaxAI:
         for x, y in valid_moves:
             # 1. Directly block a threat
             board.place_stone(x, y, attacker)
-            threats = self._count_threats(board, x, y, attacker)
+            threats = self._count_threats_cached(board, x, y, attacker)
             board.undo_stone(x, y, attacker)
 
             if (threats["fives"] > 0 or
@@ -1468,7 +1521,7 @@ class MinMaxAI:
 
             # 2. Create a counter-threat
             board.place_stone(x, y, defender)
-            counter = self._count_threats(board, x, y, defender)
+            counter = self._count_threats_cached(board, x, y, defender)
             board.undo_stone(x, y, defender)
 
             if counter["open_fours"] > 0 or counter["closed_fours"] > 0:
