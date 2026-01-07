@@ -114,20 +114,33 @@ class CommunicationManager:
                 self.context.process_opponent_move(x, y)
 
             if ponder_result is not None:
-                # Ponder hit - use cached result and warm TT in background (non-blocking)
+                # Ponder hit - use cached result but wait until deadline for consistency
+                import time
+                ponder_start = time.time()
                 move_x, move_y = ponder_result
                 if hasattr(self.context, "board") and self.context.board is not None:
                     self.context.board.place_stone(move_x, move_y, self.context.player_stone)
-                    # Start TT warming in background (continues while waiting for next input)
+                    # Use remaining time for TT warming (BLOCKING until deadline)
                     if self.context.ai is not None and game_constants.TIME_BANK_ENABLED:
                         import threading
                         board_copy = self.context.board.copy()
                         player = self.context.player_stone
 
-                        def background_warm():
+                        def blocking_warm():
                             self.context.ai._warm_tt_background(board_copy, player)
 
-                        threading.Thread(target=background_warm, daemon=True).start()
+                        thread = threading.Thread(target=blocking_warm, daemon=True)
+                        thread.start()
+
+                        # Wait until deadline (use full time like normal moves)
+                        elapsed = time.time() - ponder_start
+                        remaining = game_constants.RESPONSE_DEADLINE - elapsed - 0.1
+                        if remaining > 0:
+                            time.sleep(remaining)
+
+                        # Stop the warming thread
+                        self.context.ai.stop_search = True
+                        thread.join(timeout=0.05)
             elif hasattr(self.context, constants.METHOD_GET_BEST_MOVE):
                 move_x, move_y = self.context.get_best_move()
             else:

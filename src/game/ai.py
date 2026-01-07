@@ -83,7 +83,8 @@ class MinMaxAI:
             book_move = opening_book.lookup(board)
             if book_move is not None:
                 logger.info(f"Opening book move: {book_move}")
-                return book_move
+                # Use time banking to warm TT instead of returning immediately
+                return self._time_banked_return(board, player, book_move, start_time)
 
         # Ultra-fast critical check (< 1ms) - detects win/block moves
         # Don't return immediately - use time banking to warm TT
@@ -171,9 +172,23 @@ class MinMaxAI:
                         force_block_move = block2
                         break
 
+        # === HYBRID ATTACK/DEFENSE LOGIC (Sente) ===
+        # If opponent has no four, check if we can create a stronger threat
+        offensive_move = None
+        our_threat = None
+        if force_block_move is None:
+            our_threat = self._find_our_best_threat(board, player)
+            if our_threat is not None:
+                threat_move, threat_type = our_threat
+                if threat_type in ['win', 'fork', 'four']:
+                    # Our threat is stronger - take initiative!
+                    logger.info(f"Offensive move ({threat_type}): {threat_move}")
+                    offensive_move = threat_move
+
         # Force block open threes before they become open fours
         # An open three (.XXX.) blocked now prevents unstoppable open four
-        if board_threats["open_threes"] and force_block_move is None:
+        # BUT: skip if we have an offensive move (our four > their open three)
+        if board_threats["open_threes"] and force_block_move is None and offensive_move is None:
             for threat in board_threats["open_threes"]:
                 blocks = threat.get("blocks", [])
                 if blocks:
@@ -202,7 +217,8 @@ class MinMaxAI:
 
         # Force block split threes (X.XX, XX.X) - fill the gap to prevent four
         # This was the Game 4 bug: split_three detected but not blocked
-        if board_threats["split_threes"] and force_block_move is None:
+        # BUT: skip if we have an offensive move (our four > their split three)
+        if board_threats["split_threes"] and force_block_move is None and offensive_move is None:
             for threat in board_threats["split_threes"]:
                 gap = threat.get("gap")
                 if gap:
@@ -225,6 +241,13 @@ class MinMaxAI:
         if force_block_move is None:
             immediate_move = self._get_immediate_move(board, player)
 
+            # If no immediate threat, try development move (open_three or building)
+            if immediate_move is None and our_threat is not None:
+                threat_move, threat_type = our_threat
+                if threat_type in ['open_three', 'building']:
+                    logger.info(f"Development move ({threat_type}): {threat_move}")
+                    immediate_move = threat_move
+
         # Phase 2: Threat Space Search (VCT) if no immediate move
         vct_move = None
         if force_block_move is None and immediate_move is None:
@@ -232,14 +255,18 @@ class MinMaxAI:
             if vct_move is not None:
                 logger.info(f"VCT found: {vct_move}")
 
-        # Determine if we have a decided move (prioritize: critical > force_block > immediate > vct)
-        decided_move = critical_move or force_block_move or immediate_move or vct_move
+        # Determine if we have a decided move
+        # Priority: critical > offensive (four/fork) > force_block > immediate > vct
+        decided_move = critical_move or offensive_move or force_block_move or immediate_move or vct_move
+
+        # Is this a critical move that should NOT be overridden by VCT counter-attack?
+        is_critical = (critical_move is not None) or (force_block_move is not None)
 
         # Phase 3: Time Banking on ALL decided moves, or Full Search
         result = None
         if decided_move is not None and constants.TIME_BANK_ENABLED:
             # We have a decided move - use remaining time to warm TT
-            result = self._time_banked_return(board, player, decided_move, start_time)
+            result = self._time_banked_return(board, player, decided_move, start_time, is_critical)
         elif decided_move is not None:
             # Time banking disabled - return immediately
             result = decided_move
@@ -261,7 +288,8 @@ class MinMaxAI:
         board,
         player: int,
         decided_move: Tuple[int, int],
-        start_time: float
+        start_time: float,
+        is_critical: bool = False
     ) -> Tuple[int, int]:
         """
         Return decided move at deadline, using remaining time productively.
@@ -317,8 +345,9 @@ class MinMaxAI:
                     self._search_at_depth(pred_board, player, depth=d)
 
             # Phase 2: Counter-attack search (~35% of remaining time)
-            # Skip if stopped or if decided_move is already a winning move
-            if self.stop_search:
+            # SKIP if move is critical (must block) or if stopped
+            # Critical moves are: win/block5 (critical_move) or blocking fours/open_threes (force_block_move)
+            if self.stop_search or is_critical:
                 return
 
             # Only search for counter-attack if we're defending (not winning)
@@ -1195,6 +1224,59 @@ class MinMaxAI:
         if best_score >= constants.IMMEDIATE_MOVE_THRESHOLD:
             return best_move
 
+        return None
+
+    def _find_our_best_threat(
+        self, board, player: int
+    ) -> Optional[Tuple[Tuple[int, int], str]]:
+        """
+        Find our best offensive move.
+
+        Returns (move, threat_type) or None.
+        threat_type: 'win', 'fork', 'four', 'open_three', 'building'
+
+        Priority: win > fork > four > open_three > building
+        """
+        best_move = None
+        best_type = None
+
+        valid_moves = board.get_valid_moves()[:20]  # Limit for speed
+
+        for move in valid_moves:
+            x, y = move
+            board.place_stone(x, y, player)
+
+            # Check for win (five)
+            if board.check_win(x, y, player):
+                board.undo_stone(x, y, player)
+                return (move, 'win')
+
+            threats = self._count_threats_cached(board, x, y, player)
+            board.undo_stone(x, y, player)
+
+            total_fours = threats["open_fours"] + threats["closed_fours"]
+
+            # Fork: double four or four+open_three (unstoppable)
+            if total_fours >= 2 or (total_fours >= 1 and threats["open_threes"] >= 1):
+                return (move, 'fork')  # Best possible, return immediately
+
+            # Four (forces opponent to block)
+            if total_fours >= 1 and best_type not in ['fork']:
+                best_move = move
+                best_type = 'four'
+
+            # Open three (only if no better found)
+            if threats["open_threes"] >= 1 and best_type is None:
+                best_move = move
+                best_type = 'open_three'
+
+            # Building move (develop position with open two)
+            if threats.get("building_twos", 0) >= 1 and best_type is None:
+                best_move = move
+                best_type = 'building'
+
+        if best_move and best_type:
+            return (best_move, best_type)
         return None
 
     def _get_early_game_move(
