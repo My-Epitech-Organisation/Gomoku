@@ -148,7 +148,7 @@ class OpeningBook:
         if not constants.OPENING_BOOK_ENABLED:
             return None
 
-        if board.move_count > constants.OPENING_BOOK_MAX_MOVES:
+        if board.move_count >= constants.OPENING_BOOK_MAX_MOVES:
             return None
 
         # Convert board to normalized representation

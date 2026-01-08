@@ -78,7 +78,8 @@ class MinMaxAI:
         opponent = 3 - player
 
         # Check opening book first (for early game moves)
-        if board.move_count <= constants.OPENING_BOOK_MAX_MOVES:
+        # Note: move_count is 0-indexed, so with MAX=2, use book for moves 0,1 only
+        if board.move_count < constants.OPENING_BOOK_MAX_MOVES:
             opening_book = get_opening_book(board.width)
             book_move = opening_book.lookup(board)
             if book_move is not None:
@@ -172,34 +173,36 @@ class MinMaxAI:
                         force_block_move = block2
                         break
 
-        # === HYBRID ATTACK/DEFENSE LOGIC (Sente) ===
-        # If opponent has no four, check if we can create a stronger threat
-        offensive_move = None
-        our_threat = None
-        if force_block_move is None:
-            our_threat = self._find_our_best_threat(board, player)
-            if our_threat is not None:
-                threat_move, threat_type = our_threat
-                if threat_type in ['win', 'fork', 'four']:
-                    # Our threat is stronger - take initiative!
-                    logger.info(f"Offensive move ({threat_type}): {threat_move}")
-                    offensive_move = threat_move
+        # === PHASE 2: CHERCHER NOS MENACES OFFENSIVES ===
+        # IMPORTANT: Faire AVANT de décider du blocage!
+        our_threat = self._find_our_best_threat(board, player)
+        our_threat_type = our_threat[1] if our_threat else None
+        if our_threat:
+            logger.debug(f"Our best threat: {our_threat[0]} ({our_threat_type})")
+        else:
+            logger.debug("No offensive threat found")
 
-        # Force block open threes before they become open fours
-        # An open three (.XXX.) blocked now prevents unstoppable open four
-        # BUT: skip if we have an offensive move (our four > their open three)
+        # === PHASE 3: DÉCISION HYBRIDE ATTAQUE/DÉFENSE ===
+
+        # On peut créer FOUR/FORK? → Jouer (priorité sur blocage open_three)
+        offensive_move = None
+        if force_block_move is None and our_threat_type in ['win', 'fork', 'four']:
+            logger.info(f"Offensive move ({our_threat_type}): {our_threat[0]}")
+            offensive_move = our_threat[0]
+
+        # Force block open threes - CRITICAL: must block BEFORE VCT unless we have four/fork
+        # NOTE: open_three vs open_three = on doit BLOQUER car l'adversaire joue après nous
+        # et atteint FOUR avant nous. Seul FOUR/FORK peut ignorer le blocage (géré ci-dessus).
         if board_threats["open_threes"] and force_block_move is None and offensive_move is None:
             for threat in board_threats["open_threes"]:
                 blocks = threat.get("blocks", [])
                 if blocks:
-                    # Prefer the block that's closer to our existing stones
                     best_block = None
                     best_score = -1
                     for block in blocks:
                         bx, by = block
                         if (0 <= bx < board.width and 0 <= by < board.height
                                 and board.grid[by][bx] == 0):
-                            # Score based on proximity to our stones
                             score = 0
                             for ddy in range(-2, 3):
                                 for ddx in range(-2, 3):
@@ -211,13 +214,11 @@ class MinMaxAI:
                                 best_score = score
                                 best_block = block
                     if best_block:
-                        logger.info(f"Force blocking open three at {best_block} (prevent open four)")
+                        logger.info(f"Force blocking OPEN_THREE at {best_block}")
                         force_block_move = best_block
                         break
 
-        # Force block split threes (X.XX, XX.X) - fill the gap to prevent four
-        # This was the Game 4 bug: split_three detected but not blocked
-        # BUT: skip if we have an offensive move (our four > their split three)
+        # Force block split threes - only if no offensive move and no open_three block
         if board_threats["split_threes"] and force_block_move is None and offensive_move is None:
             for threat in board_threats["split_threes"]:
                 gap = threat.get("gap")
@@ -225,39 +226,42 @@ class MinMaxAI:
                     gx, gy = gap
                     if (0 <= gx < board.width and 0 <= gy < board.height
                             and board.grid[gy][gx] == 0):
-                        logger.info(f"Force blocking split three at {gap} (fill gap)")
+                        logger.info(f"Force blocking SPLIT_THREE at {gap}")
                         force_block_move = gap
                         break
 
-        # Phase 0.5: Early game - prefer connected moves near opponent
-        if force_block_move is None and board.move_count <= 4:
-            early_move = self._get_early_game_move(board, player, opponent)
-            if early_move:
-                logger.info(f"Early game move: {early_move}")
-                force_block_move = early_move
-
-        # Phase 1: Check for immediate/forced moves (if no force block)
-        immediate_move = None
-        if force_block_move is None:
-            immediate_move = self._get_immediate_move(board, player)
-
-            # If no immediate threat, try development move (open_three or building)
-            if immediate_move is None and our_threat is not None:
-                threat_move, threat_type = our_threat
-                if threat_type in ['open_three', 'building']:
-                    logger.info(f"Development move ({threat_type}): {threat_move}")
-                    immediate_move = threat_move
-
-        # Phase 2: Threat Space Search (VCT) if no immediate move
+        # === PHASE 4: VCT (VICTOIRE FORCÉE) ===
+        # VCT seulement si pas de menace urgente à bloquer
         vct_move = None
-        if force_block_move is None and immediate_move is None:
+        if force_block_move is None and offensive_move is None and constants.VCT_ENABLED:
             vct_move = self._threat_space_search(board, player, max_depth=14, time_limit=1.5)
             if vct_move is not None:
-                logger.info(f"VCT found: {vct_move}")
+                logger.info(f"VCT winning sequence found: {vct_move}")
+                return self._time_banked_return(board, player, vct_move, start_time, is_critical=False)
+
+        # === PHASE 5: DÉVELOPPEMENT ===
+        # Pas de menace urgente → développer notre position
+        immediate_move = None
+        if force_block_move is None and offensive_move is None:
+            # Early game optimization
+            if board.move_count <= 4:
+                early_move = self._get_early_game_move(board, player, opponent)
+                if early_move:
+                    logger.info(f"Early game move: {early_move}")
+                    immediate_move = early_move
+
+            # Try to find an immediate threat (open four creation, etc)
+            if immediate_move is None:
+                immediate_move = self._get_immediate_move(board, player)
+
+            # Development move (open_three or building)
+            if immediate_move is None and our_threat is not None:
+                logger.info(f"Development move ({our_threat_type}): {our_threat[0]}")
+                immediate_move = our_threat[0]
 
         # Determine if we have a decided move
-        # Priority: critical > offensive (four/fork) > force_block > immediate > vct
-        decided_move = critical_move or offensive_move or force_block_move or immediate_move or vct_move
+        # Priority: critical > offensive (four/fork/vct) > force_block > immediate
+        decided_move = critical_move or offensive_move or force_block_move or immediate_move
 
         # Is this a critical move that should NOT be overridden by VCT counter-attack?
         is_critical = (critical_move is not None) or (force_block_move is not None)
@@ -272,6 +276,7 @@ class MinMaxAI:
             result = decided_move
         else:
             # No decided move - do full iterative deepening search
+            logger.info("No immediate decision, using minimax search")
             result = self._full_iterative_search(board, player, start_time)
 
         # Final fallback: ensure we ALWAYS return a valid move (prevents timeout)
@@ -1230,17 +1235,19 @@ class MinMaxAI:
         self, board, player: int
     ) -> Optional[Tuple[Tuple[int, int], str]]:
         """
-        Find our best offensive move.
+        Find our best offensive move with proper threat hierarchy.
 
         Returns (move, threat_type) or None.
         threat_type: 'win', 'fork', 'four', 'open_three', 'building'
 
         Priority: win > fork > four > open_three > building
+        Uses scoring to compare moves of the same type.
         """
         best_move = None
         best_type = None
+        best_score = 0
 
-        valid_moves = board.get_valid_moves()[:20]  # Limit for speed
+        valid_moves = board.get_valid_moves()[:30]  # Increased for better coverage
 
         for move in valid_moves:
             x, y = move
@@ -1255,25 +1262,40 @@ class MinMaxAI:
             board.undo_stone(x, y, player)
 
             total_fours = threats["open_fours"] + threats["closed_fours"]
+            open_threes = threats["open_threes"]
+            building_twos = threats.get("building_twos", 0)
+
+            # Score for comparing moves of similar type
+            score = (
+                total_fours * 1000 +
+                open_threes * 100 +
+                building_twos * 10
+            )
 
             # Fork: double four or four+open_three (unstoppable)
-            if total_fours >= 2 or (total_fours >= 1 and threats["open_threes"] >= 1):
+            if total_fours >= 2 or (total_fours >= 1 and open_threes >= 1):
                 return (move, 'fork')  # Best possible, return immediately
 
             # Four (forces opponent to block)
-            if total_fours >= 1 and best_type not in ['fork']:
-                best_move = move
-                best_type = 'four'
+            if total_fours >= 1:
+                if best_type != 'four' or score > best_score:
+                    best_move = move
+                    best_type = 'four'
+                    best_score = score
 
-            # Open three (only if no better found)
-            if threats["open_threes"] >= 1 and best_type is None:
-                best_move = move
-                best_type = 'open_three'
+            # Open three (only if no four found)
+            elif open_threes >= 1:
+                if best_type not in ['four'] and (best_type != 'open_three' or score > best_score):
+                    best_move = move
+                    best_type = 'open_three'
+                    best_score = score
 
             # Building move (develop position with open two)
-            if threats.get("building_twos", 0) >= 1 and best_type is None:
-                best_move = move
-                best_type = 'building'
+            elif building_twos >= 1:
+                if best_type is None or (best_type == 'building' and score > best_score):
+                    best_move = move
+                    best_type = 'building'
+                    best_score = score
 
         if best_move and best_type:
             return (best_move, best_type)

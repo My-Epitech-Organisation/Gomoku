@@ -59,8 +59,13 @@ HISTORY_DECAY_FACTOR = 0.9  # Multiply all history by this each age
 HISTORY_BONUS_DEPTH = True  # Scale bonus by depth (deeper = more valuable)
 
 # Opening Book - pre-computed moves for early game
-OPENING_BOOK_MAX_MOVES = 6  # Use book for first N moves
+# Reduced to 2 moves: Move 3+ patterns created problematic shared diagonals
+OPENING_BOOK_MAX_MOVES = 2  # Use book for first N moves only
 OPENING_BOOK_ENABLED = True # Toggle opening book
+
+# VCT (Victory by Continuous Threats) - threat space search
+VCT_ENABLED = True          # Toggle VCT search
+VCT_MAX_DEPTH = 14          # Maximum depth for VCT search
 
 DOUBLE_THREE_BONUS = 20_000
 DOUBLE_FOUR_BONUS = 50_000
